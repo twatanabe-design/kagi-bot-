@@ -69,6 +69,11 @@ SYSTEM_PROMPT = """あなたはKAGI秘書です。株式会社KAGIYAの代表・
 - 次のアクションを必ず提示する"""
 
 
+@app.route("/")
+def health():
+    return 'KAGI秘書 稼働中！', 200
+
+
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
