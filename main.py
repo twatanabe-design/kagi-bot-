@@ -31,11 +31,18 @@ GAS_URL = "https://script.google.com/macros/s/AKfycby0fmGuARxYhY3-z0Q-BMgW69XfME
 
 def save_to_sheet(user_id, message, response):
     try:
-        requests.post(GAS_URL, json={
-            "user_id": user_id,
-            "message": message,
-            "response": response
-        }, timeout=5)
+        import json
+        requests.post(
+            GAS_URL,
+            data=json.dumps({
+                "user_id": user_id,
+                "message": message,
+                "response": response
+            }),
+            headers={"Content-Type": "application/json"},
+            allow_redirects=True,
+            timeout=10
+        )
     except Exception:
         pass  # 保存失敗しても会話は続ける
 
