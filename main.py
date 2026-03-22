@@ -11,6 +11,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 import anthropic
 import os
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -24,6 +25,19 @@ ANTHROPIC_API_KEY = os.environ['ANTHROPIC_API_KEY']
 configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+# Google Apps Script WebアプリURL（記憶帳）
+GAS_URL = "https://script.google.com/macros/s/AKfycby0fmGuARxYhY3-z0Q-BMgW69XfMETLSEcA1-2qLMAUvhW6EYHXKAAY5PMuzHZbTYgs/exec"
+
+def save_to_sheet(user_id, message, response):
+    try:
+        requests.post(GAS_URL, json={
+            "user_id": user_id,
+            "message": message,
+            "response": response
+        }, timeout=5)
+    except Exception:
+        pass  # 保存失敗しても会話は続ける
 
 # ユーザーごとの会話履歴
 conversation_histories = {}
@@ -88,6 +102,9 @@ def handle_message(event):
     )
 
     reply_text = response.content[0].text
+
+    # Googleスプレッドシートに記録
+    save_to_sheet(user_id, user_message, reply_text)
 
     conversation_histories[user_id].append({
         "role": "assistant",
