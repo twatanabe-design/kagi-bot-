@@ -10,6 +10,7 @@ import anthropic
 import os
 import requests
 from dotenv import load_dotenv
+from property_query import is_property_query, answer_property_query
 
 load_dotenv()
 
@@ -118,16 +119,25 @@ def handle_message(event):
     if len(conversation_histories[user_id]) > 20:
         conversation_histories[user_id] = conversation_histories[user_id][-20:]
 
-    response = anthropic_client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1000,
-        system=SYSTEM_PROMPT,
-        messages=conversation_histories[user_id]
-    )
-    reply_text = response.content[0].text
+    # 物件クエリ（「〇〇邸の状況」「全申請状況」など）は専用処理
+    if is_property_query(user_message):
+        try:
+            reply_text = answer_property_query(user_message)
+            category = "代願業務"
+        except Exception as e:
+            reply_text = f"物件データの取得中にエラーが発生しました: {str(e)}"
+            category = "その他"
+    else:
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            system=SYSTEM_PROMPT,
+            messages=conversation_histories[user_id]
+        )
+        reply_text = response.content[0].text
+        category = classify_message(user_message, reply_text)
 
-    # カテゴリ判定してスプレッドシートに保存
-    category = classify_message(user_message, reply_text)
+    # スプレッドシートに保存
     save_to_sheet(user_id, user_message, reply_text, category)
 
     conversation_histories[user_id].append({"role": "assistant", "content": reply_text})
