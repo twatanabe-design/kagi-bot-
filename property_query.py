@@ -40,9 +40,27 @@ JOTAI_STATUSES  = ["計画", "実施", "完了"]
 # ── データ読み込み（GAS経由）────────────────────────────
 def load_properties() -> list[dict]:
     """GASから物件データをJSONで取得する"""
-    resp = requests.get(GAS_URL, params={"action": "getProperties"}, timeout=30)
+    resp = requests.get(
+        GAS_URL,
+        params={"action": "getProperties"},
+        timeout=30,
+        allow_redirects=True
+    )
     resp.raise_for_status()
-    result = resp.json()
+    text = resp.text.strip()
+    if not text:
+        raise RuntimeError(
+            f"GASレスポンスが空です。"
+            f"status={resp.status_code}, url={resp.url}, "
+            f"GAS_URL先頭={GAS_URL[:60]}"
+        )
+    try:
+        result = resp.json()
+    except Exception as je:
+        raise RuntimeError(
+            f"JSONパース失敗: {str(je)} / "
+            f"レスポンス先頭100字: {text[:100]}"
+        )
     if result.get("status") != "ok":
         raise RuntimeError(f"GASエラー: {result.get('message')}")
     return result["data"]
