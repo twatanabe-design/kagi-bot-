@@ -11,6 +11,8 @@ KAGI物件クエリシステム - Phase 2 GAS版（Render対応）
 import sys
 import os
 import re
+import csv
+import io
 import requests
 import anthropic
 from dotenv import dotenv_values
@@ -22,11 +24,13 @@ if os.path.exists(_env_path):
     os.environ.update(dotenv_values(_env_path))
 
 # ── 設定 ──────────────────────────────────────────────
-GAS_URL = os.environ.get(
-    "GAS_URL",
-    "https://script.google.com/macros/s/"
-    "AKfycby0fmGuARxYhY3-z0Q-BMgW69XfMETLSEcA1-2qLMAUvhW6EYHXKAAY5PMuzHZbTYgs"
-    "/exec"
+# GoogleスプレッドシートのCSV公開URL（認証不要）
+CSV_URL = os.environ.get(
+    "SHEET_CSV_URL",
+    "https://docs.google.com/spreadsheets/d/e/"
+    "2PACX-1vRJmVTUuQK104vf4L0jbWzjM6dW57uD6S-"
+    "JdNvv4kXBebqCpRTE58XPYsVWix4KV2CyP89tsgoGeGLL"
+    "/pub?gid=348234433&single=true&output=csv"
 )
 MODEL = "claude-sonnet-4-5"
 CHECKLIST_COLS = [
@@ -37,33 +41,26 @@ JISSHI_STATUSES = ["申請準備中", "申請中", "是正対応中", "交付済
 JOTAI_STATUSES  = ["計画", "実施", "完了"]
 
 
-# ── データ読み込み（GAS経由）────────────────────────────
+# ── データ読み込み（CSV公開URL経由）──────────────────────
 def load_properties() -> list[dict]:
-    """GASから物件データをJSONで取得する"""
-    resp = requests.get(
-        GAS_URL,
-        params={"action": "getProperties"},
-        timeout=30,
-        allow_redirects=True
-    )
+    """GoogleスプレッドシートのCSV公開URLからデータを取得（認証不要）"""
+    resp = requests.get(CSV_URL, timeout=30)
     resp.raise_for_status()
-    text = resp.text.strip()
-    if not text:
-        raise RuntimeError(
-            f"GASレスポンスが空です。"
-            f"status={resp.status_code}, url={resp.url}, "
-            f"GAS_URL先頭={GAS_URL[:60]}"
-        )
-    try:
-        result = resp.json()
-    except Exception as je:
-        raise RuntimeError(
-            f"JSONパース失敗: {str(je)} / "
-            f"レスポンス先頭100字: {text[:100]}"
-        )
-    if result.get("status") != "ok":
-        raise RuntimeError(f"GASエラー: {result.get('message')}")
-    return result["data"]
+
+    # BOM除去 + CSVパース
+    text = resp.content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+
+    rows = []
+    for row in reader:
+        name = row.get("物件名", "").strip()
+        if not name or name == "物件名":
+            continue
+        rows.append(row)
+
+    if not rows:
+        raise RuntimeError("スプレッドシートからデータを取得できませんでした。")
+    return rows
 
 
 # ── ユーティリティ ────────────────────────────────────
