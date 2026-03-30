@@ -65,7 +65,16 @@ def load_properties() -> list[dict]:
 
 # ── ユーティリティ ────────────────────────────────────
 def get_missing_docs(row: dict) -> list[str]:
-    return [col for col in CHECKLIST_COLS if str(row.get(col, "")).strip() == "☐"]
+    """未受領書類を返す。チェックボックス（TRUE/FALSE）と記号（☑/☐）両方に対応"""
+    missing = []
+    for col in CHECKLIST_COLS:
+        val = str(row.get(col, "")).strip().upper()
+        # FALSE・☐・空・「不要」以外のFALSE系 → 未受領
+        if val in ("FALSE", "☐", ""):
+            missing.append(col)
+        # TRUE・☑ → 受領済み（スキップ）
+        # 「不要」「不要」なども除外
+    return missing
 
 
 def row_to_summary(row: dict) -> dict:
