@@ -149,6 +149,25 @@ def buken_logout():
     session.pop("buken_auth", None)
     return redirect("/buken/login")
 
+BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理AIアシスタントです。
+代表の渡辺さんとの会話をサポートします。
+
+【スタンス】
+- 問題・矛盾があれば率直に指摘する
+- 問題なければ「了解」「記録しました」など短く返す
+- 長々と説明しない。端的に、箇条書きを活用する
+- 日付は YYYY/MM/DD 形式で表示
+
+【できること】
+- 物件の状況確認（スケジュール・書類不足・申請状況）
+- 書類の受領状況を確認・記録
+- 全申請状況の把握
+- スケジュールの矛盾チェック（例：着工が交付より前など）
+"""
+
+# /buken チャット用会話履歴（セッションベース）
+buken_histories = {}
+
 @app.route("/buken/chat", methods=["POST"])
 def buken_chat():
     if not session.get("buken_auth"):
@@ -158,24 +177,66 @@ def buken_chat():
     if not question:
         return jsonify({"answer": "質問を入力してください。"})
 
-    # 更新コマンド（「〇〇邸の構造図を受領済みに更新して」など）
+    # セッションIDで会話履歴を管理
+    session_id = session.get("buken_session_id")
+    if not session_id:
+        import uuid
+        session_id = str(uuid.uuid4())
+        session["buken_session_id"] = session_id
+    if session_id not in buken_histories:
+        buken_histories[session_id] = []
+
+    # スプレッドシートデータを取得してコンテキスト構築
+    try:
+        from property_query import load_properties, row_to_summary, get_missing_docs
+        rows = load_properties()
+        active_rows = [r for r in rows if r.get("状態", "") in ["計画", "実施"]]
+        summaries = []
+        for r in active_rows:
+            s = row_to_summary(r)
+            s["不足書類"] = get_missing_docs(r)
+            summaries.append(s)
+        sheet_context = f"【現在の進行中物件データ（{len(summaries)}件）】\n"
+        for s in summaries:
+            sheet_context += f"- {s['物件名']}（{s['物件ID']}）: 状態={s['状態']} 実施={s['実施']} 提出目標={s['確認申請_提出目標']} 不足書類={s['不足書類']}\n"
+    except Exception as e:
+        sheet_context = f"※スプレッドシートデータ取得失敗: {str(e)}"
+
+    # 更新コマンドなら先に実行してその結果もコンテキストに含める
+    update_result = None
     if is_update_command(question):
         parsed = parse_update_command(question)
         if parsed:
-            answer = execute_update(**parsed)
+            update_result = execute_update(**parsed)
         else:
-            answer = "⚠️ 更新内容を解析できませんでした。\n例：「中島邸の構造図を受領済みに更新して」"
-        return jsonify({"answer": answer})
+            update_result = "⚠️ 更新内容を解析できませんでした。例：「中島邸の構造図を受領済みに更新して」"
 
-    # 物件クエリ（「〇〇邸の状況は？」「全申請状況は？」など）
-    if is_property_query(question):
-        try:
-            answer = answer_property_query(question)
-        except Exception as e:
-            answer = f"❌ データ取得エラー: {str(e)}"
-        return jsonify({"answer": answer})
+    # ユーザーメッセージ（更新結果があれば付加）
+    user_content = question
+    if update_result:
+        user_content += f"\n\n（システム実行結果: {update_result}）"
 
-    return jsonify({"answer": "物件に関する質問か更新コマンドを入力してください。\n\n**質問例：**\n- 「中島邸の状況は？」\n- 「今の全申請状況は？」\n- 「申請準備中の物件は？」\n\n**更新例：**\n- 「中島邸の構造図を受領済みに更新して」"})
+    # 会話履歴に追加
+    buken_histories[session_id].append({"role": "user", "content": user_content})
+    if len(buken_histories[session_id]) > 20:
+        buken_histories[session_id] = buken_histories[session_id][-20:]
+
+    # Claude API呼び出し（スプレッドシートデータをsystemに含める）
+    try:
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=BUKEN_SYSTEM_PROMPT + "\n\n" + sheet_context,
+            messages=buken_histories[session_id],
+        )
+        answer = response.content[0].text
+    except Exception as e:
+        answer = f"❌ Claude APIエラー: {str(e)}"
+
+    # 会話履歴にAI返答を追加
+    buken_histories[session_id].append({"role": "assistant", "content": answer})
+
+    return jsonify({"answer": answer})
 
 @app.route("/callback", methods=['POST'])
 def callback():
