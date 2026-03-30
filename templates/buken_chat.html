@@ -152,14 +152,24 @@
   const inputEl = document.getElementById('input');
   const sendBtn = document.getElementById('send');
 
-  // IME変換中フラグ（compositionstart/endで確実に追跡）
+  // macOSのIME対策：compositionend → keydown の順で発火するため
+  // justFinishedComposing フラグで「変換確定のEnter」を無視する
   let imeComposing = false;
-  inputEl.addEventListener('compositionstart', () => { imeComposing = true; });
-  inputEl.addEventListener('compositionend', () => { imeComposing = false; });
+  let justFinishedComposing = false;
 
-  // Enterで送信（Shift+Enterで改行、IME変換中は送信しない）
+  inputEl.addEventListener('compositionstart', () => {
+    imeComposing = true;
+    justFinishedComposing = false;
+  });
+  inputEl.addEventListener('compositionend', () => {
+    imeComposing = false;
+    justFinishedComposing = true;
+    setTimeout(() => { justFinishedComposing = false; }, 0);
+  });
+
+  // Enterで送信（Shift+Enterで改行、IME変換中・変換直後は送信しない）
   inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !imeComposing) {
+    if (e.key === 'Enter' && !e.shiftKey && !imeComposing && !justFinishedComposing) {
       e.preventDefault();
       sendMessage();
     }
