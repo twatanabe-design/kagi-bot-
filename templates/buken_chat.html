@@ -152,9 +152,14 @@
   const inputEl = document.getElementById('input');
   const sendBtn = document.getElementById('send');
 
+  // IME変換中フラグ（compositionstart/endで確実に追跡）
+  let imeComposing = false;
+  inputEl.addEventListener('compositionstart', () => { imeComposing = true; });
+  inputEl.addEventListener('compositionend', () => { imeComposing = false; });
+
   // Enterで送信（Shift+Enterで改行、IME変換中は送信しない）
   inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    if (e.key === 'Enter' && !e.shiftKey && !imeComposing) {
       e.preventDefault();
       sendMessage();
     }
