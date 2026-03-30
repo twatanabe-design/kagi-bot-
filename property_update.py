@@ -8,7 +8,7 @@ import os
 import requests
 import json
 
-GAS_URL = os.environ.get("GAS_URL", "")
+GAS_URL = os.environ.get("GAS_URL", "").strip()
 
 # 更新可能なカラム一覧
 UPDATABLE_COLUMNS = [
