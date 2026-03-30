@@ -49,13 +49,13 @@ VALUE_MAP = {
 def is_update_command(text: str) -> bool:
     """更新コマンドかどうかを判定"""
     # 明示的な更新指示
-    if re.search(r"更新|変更|にして|に変えて|済みに|受領済", text):
+    if re.search(r"更新|変更|にして|に変えて|済みに|受領済|戻して|もどして|未着|未受領", text):
         return True
     # 「〇〇邸　構造図着」のような短縮形：物件名 + 書類名 + 状態略語
-    if re.search(r"(?:邸|様邸)", text) and re.search(r"着$|OK$|ok$|✓$|×$|NG$|ng$", text.strip()):
+    if re.search(r"(?:邸|様邸|の家)", text) and re.search(r"着$|OK$|ok$|✓$|×$|NG$|ng$", text.strip()):
         return True
     # 「〇〇邸　構造図着」スペース区切り形式
-    if re.search(r"(?:邸|様邸).+(?:着|OK|ok|✓|×|NG|ng)\s*$", text):
+    if re.search(r"(?:邸|様邸|の家).+(?:着|OK|ok|✓|×|NG|ng)\s*$", text):
         return True
     return False
 
