@@ -24,7 +24,14 @@ VALUE_MAP = {
     "受領": "☑",
     "済み": "☑",
     "チェック": "☑",
+    "着": "☑",          # 「構造図着」など業界略語（着工は別途除外）
+    "OK": "☑",
+    "ok": "☑",
+    "✓": "☑",
     "未": "☐",
+    "NG": "☐",
+    "ng": "☐",
+    "×": "☐",
     "申請準備中": "申請準備中",
     "是正対応中": "是正対応中",  # 「申請中」より先にチェック
     "申請中": "申請中",
@@ -37,7 +44,16 @@ VALUE_MAP = {
 
 def is_update_command(text: str) -> bool:
     """更新コマンドかどうかを判定"""
-    return bool(re.search(r"更新|変更|にして|に変えて|済みに|受領済", text))
+    # 明示的な更新指示
+    if re.search(r"更新|変更|にして|に変えて|済みに|受領済", text):
+        return True
+    # 「〇〇邸　構造図着」のような短縮形：物件名 + 書類名 + 状態略語
+    if re.search(r"(?:邸|様邸)", text) and re.search(r"着$|OK$|ok$|✓$|×$|NG$|ng$", text.strip()):
+        return True
+    # 「〇〇邸　構造図着」スペース区切り形式
+    if re.search(r"(?:邸|様邸).+(?:着|OK|ok|✓|×|NG|ng)\s*$", text):
+        return True
+    return False
 
 
 def parse_update_command(text: str) -> dict | None:
