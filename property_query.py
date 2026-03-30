@@ -84,7 +84,15 @@ def row_to_summary(row: dict) -> dict:
 
 # ── クエリ処理 ────────────────────────────────────────
 def find_property(rows: list[dict], keyword: str) -> list[dict]:
-    return [r for r in rows if keyword in r.get("物件名", "")]
+    # ① そのまま部分一致
+    matches = [r for r in rows if keyword in r.get("物件名", "")]
+    if matches:
+        return matches
+    # ② 語幹で再検索（「中島邸」→「中島」、「鈴木邸」→「鈴木」）
+    stem = re.sub(r"(様邸|邸|の家)$", "", keyword)
+    if stem and stem != keyword:
+        matches = [r for r in rows if stem in r.get("物件名", "")]
+    return matches
 
 
 def query_property_detail(rows: list[dict], keyword: str) -> tuple[dict | None, str | None]:
