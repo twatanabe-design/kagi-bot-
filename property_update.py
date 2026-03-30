@@ -76,15 +76,53 @@ def parse_update_command(text: str) -> dict | None:
     }
 
 
+def resolve_property_name(keyword: str) -> tuple[str | None, str | None]:
+    """
+    略称（例：「中島邸」）からスプレッドシート上の正式名称を解決する。
+    Returns: (正式名称, エラーメッセージ)
+    一致なし → (None, エラー文)
+    複数一致 → (None, 候補一覧)
+    1件一致 → (正式名称, None)
+    """
+    try:
+        from property_query import load_properties
+        rows = load_properties()
+    except Exception as e:
+        return None, f"データ取得エラー: {str(e)}"
+
+    # ① そのまま部分一致検索
+    matches = [r["物件名"] for r in rows if keyword in r.get("物件名", "")]
+
+    # ② 見つからなければ語幹で再検索（「中島邸」→「中島」）
+    if not matches:
+        stem = re.sub(r"(様邸|邸|の家)$", "", keyword)
+        if stem and stem != keyword:
+            matches = [r["物件名"] for r in rows if stem in r.get("物件名", "")]
+
+    if not matches:
+        return None, f"「{keyword}」に一致する物件が見つかりませんでした。正式名称で入力してください。"
+
+    if len(matches) > 1:
+        names = "、".join(matches)
+        return None, f"複数の物件がヒットしました：{names}\nもう少し詳しい名前で入力してください。"
+
+    return matches[0], None
+
+
 def execute_update(property_name: str, column: str, value: str) -> str:
     """GAS doPost() を呼び出してスプレッドシートを更新する"""
     if not GAS_URL:
         return "❌ GAS_URL が設定されていません。Render の環境変数を確認してください。"
 
+    # 略称を正式名称に解決
+    resolved_name, error = resolve_property_name(property_name)
+    if error:
+        return f"❌ {error}"
+
     try:
         payload = {
             "action": "update_property",
-            "property_name": property_name,
+            "property_name": resolved_name,
             "column": column,
             "value": value,
         }
@@ -94,7 +132,7 @@ def execute_update(property_name: str, column: str, value: str) -> str:
         result = resp.json()
         if result.get("success"):
             display_value = value if value not in ("☑", "☐") else ("受領済み" if value == "☑" else "未受領")
-            return f"✅ 「{property_name}」の「{column}」を「{display_value}」に更新しました。"
+            return f"✅ 「{resolved_name}」の「{column}」を「{display_value}」に更新しました。"
         else:
             return f"❌ 更新失敗: {result.get('error', '不明なエラー')}"
 
