@@ -1,4 +1,4 @@
-from flask import Flask, request, abort
+from flask import Flask, request, abort, session, redirect, render_template, jsonify
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -11,10 +11,12 @@ import os
 import requests
 from dotenv import load_dotenv
 from property_query import is_property_query, answer_property_query
+from property_update import is_update_command, parse_update_command, execute_update
 
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
 LINE_CHANNEL_SECRET = os.environ['LINE_CHANNEL_SECRET']
 LINE_CHANNEL_ACCESS_TOKEN = os.environ['LINE_CHANNEL_ACCESS_TOKEN']
@@ -95,6 +97,85 @@ SYSTEM_PROMPT = """あなたはKAGI秘書です。株式会社KAGIYAの代表・
 @app.route("/")
 def health():
     return 'KAGI秘書 稼働中！', 200
+
+
+# -----------------------------------------------
+# 物件管理チャット（/buken）
+# -----------------------------------------------
+BUKEN_PASSWORD = os.environ.get("BUKEN_PASSWORD", "kagiya2024")
+
+@app.route("/buken")
+def buken_index():
+    if not session.get("buken_auth"):
+        return redirect("/buken/login")
+    return render_template("buken_chat.html")
+
+@app.route("/buken/login", methods=["GET", "POST"])
+def buken_login():
+    error = False
+    if request.method == "POST":
+        if request.form.get("password") == BUKEN_PASSWORD:
+            session["buken_auth"] = True
+            return redirect("/buken")
+        error = True
+    return f"""<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KAGIYA 物件管理 - ログイン</title>
+<style>
+  body {{ font-family: -apple-system, sans-serif; background: #f0f2f5;
+         display: flex; justify-content: center; align-items: center; height: 100dvh; }}
+  .box {{ background: #fff; padding: 40px; border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 300px; }}
+  h2 {{ color: #1a1a2e; margin-bottom: 24px; font-size: 18px; text-align: center; }}
+  input {{ width: 100%; padding: 10px 14px; border: 1px solid #ddd;
+           border-radius: 8px; font-size: 15px; margin-bottom: 12px; }}
+  button {{ width: 100%; padding: 11px; background: #1a1a2e; color: #fff;
+            border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }}
+  button:hover {{ background: #2d2d5e; }}
+  .err {{ color: #e00; font-size: 13px; margin-bottom: 10px; text-align: center; }}
+</style></head>
+<body><div class="box">
+  <h2>🏠 KAGIYA 物件管理</h2>
+  {"<p class='err'>パスワードが違います</p>" if error else ""}
+  <form method="POST">
+    <input type="password" name="password" placeholder="パスワード" autofocus>
+    <button type="submit">ログイン</button>
+  </form>
+</div></body></html>"""
+
+@app.route("/buken/logout")
+def buken_logout():
+    session.pop("buken_auth", None)
+    return redirect("/buken/login")
+
+@app.route("/buken/chat", methods=["POST"])
+def buken_chat():
+    if not session.get("buken_auth"):
+        return jsonify({"answer": "セッションが切れました。再ログインしてください。"}), 401
+
+    question = (request.json or {}).get("question", "").strip()
+    if not question:
+        return jsonify({"answer": "質問を入力してください。"})
+
+    # 更新コマンド（「〇〇邸の構造図を受領済みに更新して」など）
+    if is_update_command(question):
+        parsed = parse_update_command(question)
+        if parsed:
+            answer = execute_update(**parsed)
+        else:
+            answer = "⚠️ 更新内容を解析できませんでした。\n例：「中島邸の構造図を受領済みに更新して」"
+        return jsonify({"answer": answer})
+
+    # 物件クエリ（「〇〇邸の状況は？」「全申請状況は？」など）
+    if is_property_query(question):
+        try:
+            answer = answer_property_query(question)
+        except Exception as e:
+            answer = f"❌ データ取得エラー: {str(e)}"
+        return jsonify({"answer": answer})
+
+    return jsonify({"answer": "物件に関する質問か更新コマンドを入力してください。\n\n**質問例：**\n- 「中島邸の状況は？」\n- 「今の全申請状況は？」\n- 「申請準備中の物件は？」\n\n**更新例：**\n- 「中島邸の構造図を受領済みに更新して」"})
 
 @app.route("/callback", methods=['POST'])
 def callback():
