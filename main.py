@@ -165,44 +165,42 @@ BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理A
 - スケジュールの矛盾チェック（例：着工が交付より前など）
 """
 
-# /buken チャット用会話履歴（セッションベース）
+# 会話履歴（LINE: user_id別、Web: session_id別）
 buken_histories = {}
 
-@app.route("/buken/chat", methods=["POST"])
-def buken_chat():
-    if not session.get("buken_auth"):
-        return jsonify({"answer": "セッションが切れました。再ログインしてください。"}), 401
 
-    question = (request.json or {}).get("question", "").strip()
-    if not question:
-        return jsonify({"answer": "質問を入力してください。"})
-
-    # セッションIDで会話履歴を管理
-    session_id = session.get("buken_session_id")
-    if not session_id:
-        import uuid
-        session_id = str(uuid.uuid4())
-        session["buken_session_id"] = session_id
-    if session_id not in buken_histories:
-        buken_histories[session_id] = []
-
-    # スプレッドシートデータを取得してコンテキスト構築
+def build_sheet_context() -> str:
+    """スプレッドシートの進行中物件データをテキスト化してClaudeに渡す"""
     try:
         from property_query import load_properties, row_to_summary, get_missing_docs
         rows = load_properties()
         active_rows = [r for r in rows if r.get("状態", "") in ["計画", "実施"]]
-        summaries = []
+        ctx = f"【現在の進行中物件データ（{len(active_rows)}件）】\n"
         for r in active_rows:
             s = row_to_summary(r)
             s["不足書類"] = get_missing_docs(r)
-            summaries.append(s)
-        sheet_context = f"【現在の進行中物件データ（{len(summaries)}件）】\n"
-        for s in summaries:
-            sheet_context += f"- {s['物件名']}（{s['物件ID']}）: 状態={s['状態']} 実施={s['実施']} 提出目標={s['確認申請_提出目標']} 不足書類={s['不足書類']}\n"
+            ctx += (
+                f"- {s['物件名']}（{s['物件ID']}）: "
+                f"状態={s['状態']} 実施={s['実施']} "
+                f"提出目標={s['確認申請_提出目標']} "
+                f"不足書類={s['不足書類']}\n"
+            )
+        return ctx
     except Exception as e:
-        sheet_context = f"※スプレッドシートデータ取得失敗: {str(e)}"
+        return f"※スプレッドシートデータ取得失敗: {str(e)}"
 
-    # 更新コマンドなら先に実行してその結果もコンテキストに含める
+
+def buken_ask(history_key: str, question: str) -> str:
+    """
+    物件管理AIの共通処理。
+    history_key: LINE=user_id、Web=session_id
+    question: ユーザー入力
+    戻り値: Claudeの回答文字列
+    """
+    if history_key not in buken_histories:
+        buken_histories[history_key] = []
+
+    # 更新コマンドなら先に実行
     update_result = None
     if is_update_command(question):
         parsed = parse_update_command(question)
@@ -216,26 +214,43 @@ def buken_chat():
     if update_result:
         user_content += f"\n\n（システム実行結果: {update_result}）"
 
-    # 会話履歴に追加
-    buken_histories[session_id].append({"role": "user", "content": user_content})
-    if len(buken_histories[session_id]) > 20:
-        buken_histories[session_id] = buken_histories[session_id][-20:]
+    buken_histories[history_key].append({"role": "user", "content": user_content})
+    if len(buken_histories[history_key]) > 20:
+        buken_histories[history_key] = buken_histories[history_key][-20:]
 
-    # Claude API呼び出し（スプレッドシートデータをsystemに含める）
+    # スプレッドシートデータを毎回取得してsystemに渡す
+    sheet_context = build_sheet_context()
+
     try:
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=BUKEN_SYSTEM_PROMPT + "\n\n" + sheet_context,
-            messages=buken_histories[session_id],
+            messages=buken_histories[history_key],
         )
         answer = response.content[0].text
     except Exception as e:
         answer = f"❌ Claude APIエラー: {str(e)}"
 
-    # 会話履歴にAI返答を追加
-    buken_histories[session_id].append({"role": "assistant", "content": answer})
+    buken_histories[history_key].append({"role": "assistant", "content": answer})
+    return answer
 
+
+@app.route("/buken/chat", methods=["POST"])
+def buken_chat():
+    if not session.get("buken_auth"):
+        return jsonify({"answer": "セッションが切れました。再ログインしてください。"}), 401
+
+    question = (request.json or {}).get("question", "").strip()
+    if not question:
+        return jsonify({"answer": "質問を入力してください。"})
+
+    # セッションIDで履歴管理
+    import uuid
+    session_id = session.get("buken_session_id") or str(uuid.uuid4())
+    session["buken_session_id"] = session_id
+
+    answer = buken_ask(session_id, question)
     return jsonify({"answer": answer})
 
 @app.route("/callback", methods=['POST'])
@@ -253,35 +268,18 @@ def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text
 
-    if user_id not in conversation_histories:
-        conversation_histories[user_id] = []
-
-    conversation_histories[user_id].append({"role": "user", "content": user_message})
-
-    if len(conversation_histories[user_id]) > 20:
-        conversation_histories[user_id] = conversation_histories[user_id][-20:]
-
-    # 物件更新コマンド（「〇〇邸の構造図を受領済みに更新して」など）
-    if is_update_command(user_message):
-        try:
-            parsed = parse_update_command(user_message)
-            if parsed:
-                reply_text = execute_update(**parsed)
-            else:
-                reply_text = "更新内容を解析できませんでした。\n例：「中島邸の構造図を受領済みに更新して」"
-            category = "代願業務"
-        except Exception as e:
-            reply_text = f"更新中にエラーが発生しました: {str(e)}"
-            category = "その他"
-    # 物件クエリ（「〇〇邸の状況」「全申請状況」など）は専用処理
-    elif is_property_query(user_message):
-        try:
-            reply_text = answer_property_query(user_message)
-            category = "代願業務"
-        except Exception as e:
-            reply_text = f"物件データの取得中にエラーが発生しました: {str(e)}"
-            category = "その他"
+    # 物件関連（更新・クエリ）→ buken_ask（/bukenと同じ頭脳）
+    if is_update_command(user_message) or is_property_query(user_message):
+        reply_text = buken_ask(f"line_{user_id}", user_message)
+        category = "代願業務"
     else:
+        # それ以外→KAGI秘書（通常会話）
+        if user_id not in conversation_histories:
+            conversation_histories[user_id] = []
+        conversation_histories[user_id].append({"role": "user", "content": user_message})
+        if len(conversation_histories[user_id]) > 20:
+            conversation_histories[user_id] = conversation_histories[user_id][-20:]
+
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1000,
@@ -290,11 +288,13 @@ def handle_message(event):
         )
         reply_text = response.content[0].text
         category = classify_message(user_message, reply_text)
+        conversation_histories[user_id].append({"role": "assistant", "content": reply_text})
 
-    # スプレッドシートに保存
+    # KAGI記憶帳に記録
     save_to_sheet(user_id, user_message, reply_text, category)
 
-    conversation_histories[user_id].append({"role": "assistant", "content": reply_text})
+    # LINEに返信（5000文字制限対応）
+    reply_text = reply_text[:4990] + "…" if len(reply_text) > 4990 else reply_text
 
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
