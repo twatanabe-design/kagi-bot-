@@ -200,8 +200,20 @@ def handle_message(event):
     if len(conversation_histories[user_id]) > 20:
         conversation_histories[user_id] = conversation_histories[user_id][-20:]
 
+    # 物件更新コマンド（「〇〇邸の構造図を受領済みに更新して」など）
+    if is_update_command(user_message):
+        try:
+            parsed = parse_update_command(user_message)
+            if parsed:
+                reply_text = execute_update(**parsed)
+            else:
+                reply_text = "更新内容を解析できませんでした。\n例：「中島邸の構造図を受領済みに更新して」"
+            category = "代願業務"
+        except Exception as e:
+            reply_text = f"更新中にエラーが発生しました: {str(e)}"
+            category = "その他"
     # 物件クエリ（「〇〇邸の状況」「全申請状況」など）は専用処理
-    if is_property_query(user_message):
+    elif is_property_query(user_message):
         try:
             reply_text = answer_property_query(user_message)
             category = "代願業務"
