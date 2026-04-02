@@ -314,9 +314,10 @@ def build_sheet_context() -> str:
         for r in active_rows:
             s = row_to_summary(r)
             s["不足書類"] = get_missing_docs(r)
+            代願元 = r.get("自社/他社", "").strip() or "不明"
             ctx += (
                 f"- {s['物件名']}（{s['物件ID']}）: "
-                f"状態={s['状態']} 実施={s['実施']} "
+                f"代願元={代願元} 状態={s['状態']} 実施={s['実施']} "
                 f"提出目標={s['確認申請_提出目標']} "
                 f"不足書類={s['不足書類']}\n"
             )
