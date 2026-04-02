@@ -164,8 +164,39 @@ BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理A
 - スケジュールの矛盾チェック（例：着工が交付より前など）
 """
 
-# 会話履歴（LINE: user_id別、Web: session_id別）
+# 会話履歴（全デバイス共通の単一キー）
+BUKEN_HISTORY_KEY = "buken_main"
 buken_histories = {}
+
+
+def load_buken_history_from_gas(limit=30) -> list:
+    """GASから物件管理履歴を読み込む（サーバー再起動時に復元）"""
+    try:
+        resp = requests.get(
+            GAS_URL,
+            params={"action": "read_buken", "limit": limit},
+            timeout=10
+        )
+        data = resp.json()
+        return data.get("messages", [])
+    except Exception:
+        return []
+
+
+def save_buken_message_to_gas(role: str, content: str):
+    """GASに物件管理の1メッセージを追記"""
+    try:
+        requests.get(
+            GAS_URL,
+            params={
+                "action": "write_buken",
+                "role": role,
+                "content": content[:2000]
+            },
+            timeout=10
+        )
+    except Exception:
+        pass
 
 
 def build_sheet_context() -> str:
@@ -189,15 +220,15 @@ def build_sheet_context() -> str:
         return f"※スプレッドシートデータ取得失敗: {str(e)}"
 
 
-def buken_ask(history_key: str, question: str) -> str:
+def buken_ask(question: str) -> str:
     """
-    物件管理AIの共通処理。
-    history_key: LINE=user_id、Web=session_id
+    物件管理AIの共通処理（全デバイス共通履歴）。
     question: ユーザー入力
     戻り値: Claudeの回答文字列
     """
-    if history_key not in buken_histories:
-        buken_histories[history_key] = []
+    # 初回（サーバー再起動後）はGASから履歴を復元
+    if BUKEN_HISTORY_KEY not in buken_histories:
+        buken_histories[BUKEN_HISTORY_KEY] = load_buken_history_from_gas()
 
     # 更新コマンドなら先に実行
     update_result = None
@@ -213,9 +244,12 @@ def buken_ask(history_key: str, question: str) -> str:
     if update_result:
         user_content += f"\n\n（システム実行結果: {update_result}）"
 
-    buken_histories[history_key].append({"role": "user", "content": user_content})
-    if len(buken_histories[history_key]) > 20:
-        buken_histories[history_key] = buken_histories[history_key][-20:]
+    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content})
+    if len(buken_histories[BUKEN_HISTORY_KEY]) > 30:
+        buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-30:]
+
+    # GASに保存
+    save_buken_message_to_gas("user", user_content)
 
     # スプレッドシートデータを毎回取得してsystemに渡す
     sheet_context = build_sheet_context()
@@ -225,13 +259,14 @@ def buken_ask(history_key: str, question: str) -> str:
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=BUKEN_SYSTEM_PROMPT + "\n\n" + sheet_context,
-            messages=buken_histories[history_key],
+            messages=buken_histories[BUKEN_HISTORY_KEY],
         )
         answer = response.content[0].text
     except Exception as e:
         answer = f"❌ Claude APIエラー: {str(e)}"
 
-    buken_histories[history_key].append({"role": "assistant", "content": answer})
+    buken_histories[BUKEN_HISTORY_KEY].append({"role": "assistant", "content": answer})
+    save_buken_message_to_gas("assistant", answer)
     return answer
 
 
@@ -244,12 +279,7 @@ def buken_chat():
     if not question:
         return jsonify({"answer": "質問を入力してください。"})
 
-    # セッションIDで履歴管理
-    import uuid
-    session_id = session.get("buken_session_id") or str(uuid.uuid4())
-    session["buken_session_id"] = session_id
-
-    answer = buken_ask(session_id, question)
+    answer = buken_ask(question)
     return jsonify({"answer": answer})
 
 @app.route("/callback", methods=['POST'])
