@@ -127,9 +127,33 @@
   }
   #send:hover { background: #2d2d5e; }
   #send:disabled { background: #aaa; cursor: default; }
+
+  /* 横向き時のオーバーレイ（モバイルのみ） */
+  #landscape-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #1a1a2e;
+    color: #fff;
+    z-index: 9999;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    font-size: 16px;
+    text-align: center;
+  }
+  #landscape-overlay span { font-size: 40px; }
+  @media screen and (orientation: landscape) and (max-height: 500px) {
+    #landscape-overlay { display: flex; }
+  }
 </style>
 </head>
 <body>
+<div id="landscape-overlay">
+  <span>📱</span>
+  <p>縦向きでご利用ください</p>
+</div>
 <header>
   <h1>🏠 KAGIYA 物件管理</h1>
   <a href="/buken/logout">ログアウト</a>
