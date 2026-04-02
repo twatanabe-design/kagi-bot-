@@ -28,6 +28,98 @@ anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 GAS_URL = "https://script.google.com/macros/s/AKfycby0fmGuARxYhY3-z0Q-BMgW69XfMETLSEcA1-2qLMAUvhW6EYHXKAAY5PMuzHZbTYgs/exec"
 
 # -----------------------------------------------
+# カイメモ機能（memo: プレフィックス）
+# -----------------------------------------------
+# プレフィックスを変更・無効化したい場合はここだけ修正する
+MEMO_PREFIX = "memo:"
+
+def is_memo_command(text: str) -> bool:
+    """memo: から始まるメッセージかどうか判定"""
+    return text.strip().lower().startswith(MEMO_PREFIX)
+
+def extract_memo_body(text: str) -> str:
+    """memo: プレフィックスを除いたメモ本文を返す"""
+    return text.strip()[len(MEMO_PREFIX):].strip()
+
+def classify_kai_memo(memo: str) -> str:
+    """Claude APIでメモを「業務」か「プライベート」に分類"""
+    try:
+        result = anthropic_client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=20,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "以下のメモを「業務」か「プライベート」の1語だけで分類してください。\n"
+                    "・業務：建築設計、確認申請、代願業務、民泊事業、取引先、仕事全般\n"
+                    "・プライベート：個人の買い物、家族、趣味、健康、食事、日常生活\n"
+                    "迷う場合は「業務」にしてください。\n\n"
+                    f"メモ：{memo}\n\n"
+                    "「業務」または「プライベート」のみ返してください。"
+                )
+            }]
+        )
+        result_text = result.content[0].text.strip()
+        return "プライベート" if "プライベート" in result_text else "業務"
+    except Exception:
+        return "業務"
+
+def generate_kai_memo_tags(memo: str) -> str:
+    """Claude APIでメモから自動タグを1〜3個生成"""
+    try:
+        result = anthropic_client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=80,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "以下のメモ内容に対して、適切なタグを1〜3個生成してください。\n"
+                    "タグは日本語のキーワードで、カンマ区切りで返してください。\n"
+                    "候補例：場所, 持ち物, アイデア, 買い物, 仕事, プライベート, "
+                    "確認待ち, 設計, 民泊, 代願業務, 締め切り, 連絡 など\n\n"
+                    f"メモ：{memo}\n\n"
+                    "タグのみ返してください（例：仕事, 確認待ち）"
+                )
+            }]
+        )
+        return result.content[0].text.strip()
+    except Exception:
+        return "その他"
+
+def save_kai_memo(memo: str, destination: str, tags: str) -> bool:
+    """GAS経由でカイメモを保存。業務→KAGI記憶帳、プライベート→T.W. LOG"""
+    from datetime import datetime
+    now = datetime.now().strftime("%Y/%m/%d %H:%M")
+    action = "write_memo" if destination == "業務" else "write_tw_memo"
+    try:
+        requests.get(
+            GAS_URL,
+            params={
+                "action": action,
+                "timestamp": now,
+                "memo": memo,
+                "tags": tags,
+                "status": "未確認"
+            },
+            allow_redirects=True,
+            timeout=15
+        )
+        return True
+    except Exception:
+        return False
+
+def handle_memo_command(memo_text: str) -> str:
+    """メモコマンドの一連処理。返信メッセージを返す"""
+    destination = classify_kai_memo(memo_text)
+    tags = generate_kai_memo_tags(memo_text)
+    success = save_kai_memo(memo_text, destination, tags)
+    if success:
+        dest_label = "KAGI記憶帳（業務）" if destination == "業務" else "T.W. LOG（プライベート）"
+        return f"📝 メモ記録したよ！\n振り分け：{dest_label}\nタグ：{tags}"
+    else:
+        return "❌ メモの保存に失敗しました。"
+
+# -----------------------------------------------
 # カテゴリ自動判定（民泊/代願業務/設計業務/その他）
 # -----------------------------------------------
 def classify_message(user_message, reply_text):
@@ -309,6 +401,22 @@ def callback():
 def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text
+
+    # memo: プレフィックスならカイメモ処理
+    if is_memo_command(user_message):
+        memo_body = extract_memo_body(user_message)
+        reply_text = handle_memo_command(memo_body)
+        save_to_sheet(user_id, user_message, reply_text, "その他")
+        reply_text = reply_text[:4990] + "…" if len(reply_text) > 4990 else reply_text
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message_with_http_info(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+            )
+        return
 
     # LINEはKAGI秘書のみ（各物件一覧への書き込みはClaudeCode経由のみ）
     if user_id not in conversation_histories:
