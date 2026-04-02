@@ -10,7 +10,6 @@ import anthropic
 import os
 import requests
 from dotenv import load_dotenv
-from property_query import is_property_query, answer_property_query
 from property_update import is_update_command, parse_update_command, execute_update
 
 load_dotenv()
@@ -268,27 +267,22 @@ def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text
 
-    # 物件関連（更新・クエリ）→ buken_ask（/bukenと同じ頭脳）
-    if is_update_command(user_message) or is_property_query(user_message):
-        reply_text = buken_ask(f"line_{user_id}", user_message)
-        category = "代願業務"
-    else:
-        # それ以外→KAGI秘書（通常会話）
-        if user_id not in conversation_histories:
-            conversation_histories[user_id] = []
-        conversation_histories[user_id].append({"role": "user", "content": user_message})
-        if len(conversation_histories[user_id]) > 20:
-            conversation_histories[user_id] = conversation_histories[user_id][-20:]
+    # LINEはKAGI秘書のみ（各物件一覧への書き込みはClaudeCode経由のみ）
+    if user_id not in conversation_histories:
+        conversation_histories[user_id] = []
+    conversation_histories[user_id].append({"role": "user", "content": user_message})
+    if len(conversation_histories[user_id]) > 20:
+        conversation_histories[user_id] = conversation_histories[user_id][-20:]
 
-        response = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1000,
-            system=SYSTEM_PROMPT,
-            messages=conversation_histories[user_id]
-        )
-        reply_text = response.content[0].text
-        category = classify_message(user_message, reply_text)
-        conversation_histories[user_id].append({"role": "assistant", "content": reply_text})
+    response = anthropic_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        system=SYSTEM_PROMPT,
+        messages=conversation_histories[user_id]
+    )
+    reply_text = response.content[0].text
+    category = classify_message(user_message, reply_text)
+    conversation_histories[user_id].append({"role": "assistant", "content": reply_text})
 
     # KAGI記憶帳に記録
     save_to_sheet(user_id, user_message, reply_text, category)
