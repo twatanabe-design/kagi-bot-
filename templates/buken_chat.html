@@ -164,6 +164,25 @@
   const inputEl = document.getElementById('input');
   const sendBtn = document.getElementById('send');
 
+  // 起動時に直近の会話履歴を表示
+  async function loadHistory() {
+    try {
+      const res = await fetch('/buken/history');
+      const data = await res.json();
+      if (data.messages && data.messages.length > 0) {
+        const sep = document.createElement('div');
+        sep.className = 'hint';
+        sep.textContent = `── 直近${data.messages.length}件の履歴 ──`;
+        messagesEl.appendChild(sep);
+        data.messages.forEach(msg => {
+          addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot');
+        });
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    } catch (e) { /* 履歴取得失敗は無視 */ }
+  }
+  loadHistory();
+
   // macOSのIME対策：compositionend → keydown の順で発火するため
   // justFinishedComposing フラグで「変換確定のEnter」を無視する
   let imeComposing = false;

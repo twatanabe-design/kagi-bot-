@@ -376,6 +376,16 @@ def buken_ask(question: str) -> str:
     return answer
 
 
+@app.route("/buken/history", methods=["GET"])
+def buken_history():
+    if not session.get("buken_auth"):
+        return jsonify({"messages": []}), 401
+    if BUKEN_HISTORY_KEY not in buken_histories:
+        buken_histories[BUKEN_HISTORY_KEY] = load_buken_history_from_gas()
+    messages = buken_histories[BUKEN_HISTORY_KEY][-20:]
+    return jsonify({"messages": messages})
+
+
 @app.route("/buken/chat", methods=["POST"])
 def buken_chat():
     if not session.get("buken_auth"):
