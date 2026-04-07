@@ -331,11 +331,12 @@ def save_buken_message_to_gas(role: str, content: str):
         pass
 
 
-def build_sheet_context() -> str:
-    """スプレッドシートの全物件データをリアルタイムで取得してClaudeに渡す"""
+def build_sheet_context(rows=None) -> str:
+    """スプレッドシートの全物件データをリアルタイムで取得してClaudeに渡す。rowsを渡すと再フェッチしない。"""
     try:
         from property_query import load_properties, row_to_summary, get_missing_docs
-        rows = load_properties()
+        if rows is None:
+            rows = load_properties()
         active_rows = [r for r in rows if r.get("状態", "") in ["計画", "実施"]]
         completed_rows = [r for r in rows if r.get("状態", "") == "完了"]
 
@@ -381,12 +382,20 @@ def buken_ask(question: str) -> str:
     if BUKEN_HISTORY_KEY not in buken_histories:
         buken_histories[BUKEN_HISTORY_KEY] = load_buken_history_from_gas()
 
-    # 更新コマンドなら先に実行
+    # スプレッドシートデータを1回だけ取得（更新・コンテキスト構築で共有）
+    cached_rows = None
+    try:
+        from property_query import load_properties
+        cached_rows = load_properties()
+    except Exception:
+        pass
+
+    # 更新コマンドなら先に実行（キャッシュ済みrowsを渡して二重フェッチ防止）
     update_result = None
     if is_update_command(question):
         parsed = parse_update_command(question)
         if parsed:
-            update_result = execute_update(**parsed)
+            update_result = execute_update(**parsed, rows=cached_rows)
         else:
             update_result = "⚠️ 更新内容を解析できませんでした。例：「中島邸の構造図を受領済みに更新して」"
 
@@ -402,8 +411,8 @@ def buken_ask(question: str) -> str:
     # GASに保存
     save_buken_message_to_gas("user", user_content)
 
-    # スプレッドシートデータを毎回取得してsystemに渡す
-    sheet_context = build_sheet_context()
+    # スプレッドシートデータをsystemに渡す（キャッシュ済みrowsを使い回し）
+    sheet_context = build_sheet_context(rows=cached_rows)
 
     try:
         response = anthropic_client.messages.create(

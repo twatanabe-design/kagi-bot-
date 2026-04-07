@@ -97,19 +97,18 @@ def parse_update_command(text: str) -> dict | None:
     }
 
 
-def resolve_property_name(keyword: str) -> tuple[str | None, str | None]:
+def resolve_property_name(keyword: str, rows: list | None = None) -> tuple[str | None, str | None]:
     """
     略称（例：「中島邸」）からスプレッドシート上の正式名称を解決する。
+    rows を渡すと再フェッチしない（キャッシュ利用）。
     Returns: (正式名称, エラーメッセージ)
-    一致なし → (None, エラー文)
-    複数一致 → (None, 候補一覧)
-    1件一致 → (正式名称, None)
     """
-    try:
-        from property_query import load_properties
-        rows = load_properties()
-    except Exception as e:
-        return None, f"データ取得エラー: {str(e)}"
+    if rows is None:
+        try:
+            from property_query import load_properties
+            rows = load_properties()
+        except Exception as e:
+            return None, f"データ取得エラー: {str(e)}"
 
     # ① そのまま部分一致検索
     matches = [r["物件名"] for r in rows if keyword in r.get("物件名", "")]
@@ -130,13 +129,13 @@ def resolve_property_name(keyword: str) -> tuple[str | None, str | None]:
     return matches[0], None
 
 
-def execute_update(property_name: str, column: str, value: str) -> str:
-    """GAS doPost() を呼び出してスプレッドシートを更新する"""
+def execute_update(property_name: str, column: str, value: str, rows: list | None = None) -> str:
+    """GAS を呼び出してスプレッドシートを更新する。rows を渡すと再フェッチしない。"""
     if not GAS_URL:
         return "❌ GAS_URL が設定されていません。Render の環境変数を確認してください。"
 
-    # 略称を正式名称に解決
-    resolved_name, error = resolve_property_name(property_name)
+    # 略称を正式名称に解決（rows キャッシュを利用）
+    resolved_name, error = resolve_property_name(property_name, rows=rows)
     if error:
         return f"❌ {error}"
 
