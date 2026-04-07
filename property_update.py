@@ -8,7 +8,8 @@ import os
 import requests
 import json
 
-GAS_URL = os.environ.get("GAS_URL", "").strip()
+GAS_URL = os.environ.get("GAS_URL", "").strip() or \
+    "https://script.google.com/macros/s/AKfycby0fmGuARxYhY3-z0Q-BMgW69XfMETLSEcA1-2qLMAUvhW6EYHXKAAY5PMuzHZbTYgs/exec"
 
 # 更新可能なカラム一覧
 UPDATABLE_COLUMNS = [
@@ -146,7 +147,7 @@ def execute_update(property_name: str, column: str, value: str) -> str:
             "column": column,
             "value": value,
         }
-        resp = requests.post(GAS_URL, json=payload, timeout=30, allow_redirects=True)
+        resp = requests.get(GAS_URL, params=payload, timeout=30, allow_redirects=True)
         resp.raise_for_status()
 
         result = resp.json()
