@@ -130,29 +130,33 @@ def resolve_property_name(keyword: str, rows: list | None = None) -> tuple[str |
 
 
 def execute_update(property_name: str, column: str, value: str, rows: list | None = None) -> str:
-    """GAS を呼び出してスプレッドシートを更新する。rows を渡すと再フェッチしない。"""
+    """GAS を呼び出してスプレッドシートを更新する。CSVフェッチ不要。"""
     if not GAS_URL:
         return "❌ GAS_URL が設定されていません。Render の環境変数を確認してください。"
 
-    # 略称を正式名称に解決（rows キャッシュを利用）
-    resolved_name, error = resolve_property_name(property_name, rows=rows)
-    if error:
-        return f"❌ {error}"
+    # 語幹を抽出してGAS側の部分一致に使う（「三浦邸」→「三浦」で「三浦様邸」にヒット）
+    stem = re.sub(r"(様邸|邸|の家)$", "", property_name)
+    search_name = stem if stem and stem != property_name else property_name
 
     try:
         payload = {
             "action": "update_property",
-            "property_name": resolved_name,
+            "property_name": search_name,
             "column": column,
             "value": value,
         }
         resp = requests.get(GAS_URL, params=payload, timeout=30, allow_redirects=True)
         resp.raise_for_status()
 
-        result = resp.json()
+        try:
+            result = resp.json()
+        except Exception:
+            return f"❌ GAS応答エラー（JSON解析失敗）: {resp.text[:200]}"
+
         if result.get("success"):
-            display_value = value if value not in ("☑", "☐") else ("受領済み" if value == "☑" else "未受領")
-            return f"✅ 「{resolved_name}」の「{column}」を「{display_value}」に更新しました。"
+            display_value = "受領済み" if value == "☑" else ("未受領" if value == "☐" else value)
+            matched = result.get("matched_name", property_name)
+            return f"✅ 「{matched}」の「{column}」を「{display_value}」に更新しました。"
         else:
             return f"❌ 更新失敗: {result.get('error', '不明なエラー')}"
 
