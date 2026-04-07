@@ -256,6 +256,12 @@ def buken_logout():
 BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理AIアシスタントです。
 代表の渡辺さんとの会話をサポートします。
 
+【重要：データについて】
+- このシステムプロンプトの末尾に「現在の全物件データ」が含まれています
+- このデータは**質問のたびにGoogleスプレッドシートから直接取得した最新データ**です
+- 渡辺さんがスプレッドシートを直接編集した場合も、次の質問時には最新状態が反映されます
+- 「スプレッドシートにアクセスできない」は誤りです。必ず末尾のデータを参照してください
+
 【スタンス】
 - 問題・矛盾があれば率直に指摘する
 - 問題なければ「了解」「記録しました」など短く返す
@@ -305,22 +311,40 @@ def save_buken_message_to_gas(role: str, content: str):
 
 
 def build_sheet_context() -> str:
-    """スプレッドシートの進行中物件データをテキスト化してClaudeに渡す"""
+    """スプレッドシートの全物件データをリアルタイムで取得してClaudeに渡す"""
     try:
         from property_query import load_properties, row_to_summary, get_missing_docs
         rows = load_properties()
         active_rows = [r for r in rows if r.get("状態", "") in ["計画", "実施"]]
-        ctx = f"【現在の進行中物件データ（{len(active_rows)}件）】\n"
+        completed_rows = [r for r in rows if r.get("状態", "") == "完了"]
+
+        ctx = f"【現在の全物件データ（Googleスプレッドシートより毎回リアルタイム取得）】\n"
+        ctx += f"※このデータは今このリクエスト時点でスプレッドシートから取得した最新情報です\n\n"
+
+        ctx += f"■ 進行中物件（{len(active_rows)}件）\n"
         for r in active_rows:
             s = row_to_summary(r)
             s["不足書類"] = get_missing_docs(r)
             代願元 = r.get("自社/他社", "").strip() or "不明"
+            長期申請 = r.get("長期申請", "").strip() or "未選択"
             ctx += (
                 f"- {s['物件名']}（{s['物件ID']}）: "
-                f"代願元={代願元} 状態={s['状態']} 実施={s['実施']} "
+                f"代願元={代願元} 状態={s['状態']} "
+                f"確認申請={s['実施']} 長期申請={長期申請} "
                 f"提出目標={s['確認申請_提出目標']} "
                 f"不足書類={s['不足書類']}\n"
             )
+
+        if completed_rows:
+            ctx += f"\n■ 完了物件（{len(completed_rows)}件）\n"
+            for r in completed_rows:
+                s = row_to_summary(r)
+                長期申請 = r.get("長期申請", "").strip() or "未選択"
+                ctx += (
+                    f"- {s['物件名']}（{s['物件ID']}）: "
+                    f"確認申請={s['実施']} 長期申請={長期申請}\n"
+                )
+
         return ctx
     except Exception as e:
         return f"※スプレッドシートデータ取得失敗: {str(e)}"

@@ -83,7 +83,7 @@ def row_to_summary(row: dict) -> dict:
         "物件名":          row.get("物件名", ""),
         "物件ID":          row.get("物件ID", ""),
         "状態":            row.get("状態", ""),
-        "実施":            row.get("実施", ""),
+        "実施":            row.get("確認申請", ""),
         "確認申請_提出目標": row.get("確認申請 提出目標", "未設定") or "未設定",
         "確認申請_下付目標": row.get("確認申請 下付目標", "未設定") or "未設定",
         "工事着工予定日":   row.get("工事着工予定日", "未設定") or "未設定",
@@ -123,7 +123,7 @@ def query_all_status(rows: list[dict]) -> list[dict]:
 
 
 def query_by_jisshi(rows: list[dict], status: str) -> list[dict]:
-    return [row_to_summary(r) for r in rows if status in r.get("実施", "")]
+    return [row_to_summary(r) for r in rows if status in r.get("確認申請", "")]
 
 
 def query_by_jotai(rows: list[dict], status: str) -> list[dict]:
