@@ -307,7 +307,7 @@
 
     } catch (err) {
       loading.remove();
-      addMessage('通信エラーが発生しました。', 'bot');
+      addMessage(`通信エラー: ${err.message || err}`, 'bot');
     }
 
     sendBtn.disabled = false;
