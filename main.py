@@ -262,6 +262,21 @@ BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理A
 - 渡辺さんがスプレッドシートを直接編集した場合も、次の質問時には最新状態が反映されます
 - 「スプレッドシートにアクセスできない」は誤りです。必ず末尾のデータを参照してください
 
+【物件状況への回答ルール】
+「○○邸の状況は？」などの個別物件への質問には、必ず以下の2つを組み合わせて回答すること：
+
+① スプレッドシートデータ（末尾の物件データを参照）
+  - 確認申請・長期申請の状態
+  - 提出目標日・交付目標日
+  - 不足書類
+  - 着工・検査予定日
+
+② 会話履歴内のメモ（messagesを過去に遡って検索）
+  - その物件名が含まれる発言をすべて拾う
+  - 「〇〇が来たら△△する」「〇〇待ち」「次のアクション」などの記述を抽出
+  - 見つかった場合は「📝 メモ（会話履歴より）」として明示して回答に含める
+  - 見つからない場合は省略してよい
+
 【スタンス】
 - 問題・矛盾があれば率直に指摘する
 - 問題なければ「了解」「記録しました」など短く返す
@@ -280,7 +295,7 @@ BUKEN_HISTORY_KEY = "buken_main"
 buken_histories = {}
 
 
-def load_buken_history_from_gas(limit=30) -> list:
+def load_buken_history_from_gas(limit=50) -> list:
     """GASから物件管理履歴を読み込む（サーバー再起動時に復元）"""
     try:
         resp = requests.get(
@@ -375,8 +390,8 @@ def buken_ask(question: str) -> str:
         user_content += f"\n\n（システム実行結果: {update_result}）"
 
     buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content})
-    if len(buken_histories[BUKEN_HISTORY_KEY]) > 30:
-        buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-30:]
+    if len(buken_histories[BUKEN_HISTORY_KEY]) > 50:
+        buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-50:]
 
     # GASに保存
     save_buken_message_to_gas("user", user_content)
@@ -406,7 +421,7 @@ def buken_history():
         return jsonify({"messages": []}), 401
     if BUKEN_HISTORY_KEY not in buken_histories:
         buken_histories[BUKEN_HISTORY_KEY] = load_buken_history_from_gas()
-    messages = buken_histories[BUKEN_HISTORY_KEY][-20:]
+    messages = buken_histories[BUKEN_HISTORY_KEY][-50:]
     return jsonify({"messages": messages})
 
 
