@@ -304,7 +304,7 @@
       const data = await res.json();
       loading.remove();
       addMessage(data.answer || 'エラーが発生しました。', 'bot');
-      knownMsgCount += 2; // 自分のuser+bot分を既知としてカウント
+
     } catch (err) {
       loading.remove();
       addMessage('通信エラーが発生しました。', 'bot');
