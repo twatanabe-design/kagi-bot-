@@ -346,20 +346,22 @@
   });
 
   // ── 履歴メッセージのsender・content解析 ────────
-  // サーバー再起動後はGASからsenderなしで復元されるため、
-  // content の [sender] プレフィックスからsenderを復元する
+  // content の [sender] プレフィックスから送信者を復元する
+  // (サーバー再起動後はGASからsenderなしで復元されるため)
   function parseMsgSender(msg) {
-    if (msg.sender && USERS[msg.sender]) {
-      // senderフィールドあり → プレフィックスのみ除去
-      const content = msg.content.replace(/^\[.+?\] /, '');
-      return { sender: msg.sender, content };
+    // たかまさ以外のsender候補
+    const otherSenders = ['デバイス', 'ともこ'];
+
+    // [sender] プレフィックスを優先チェック（startsWith で確実に検出）
+    for (const s of otherSenders) {
+      const prefix = `[${s}] `;
+      if (msg.content && msg.content.startsWith(prefix)) {
+        return { sender: s, content: msg.content.slice(prefix.length) };
+      }
     }
-    // senderフィールドなし → プレフィックスから復元
-    const match = msg.content.match(/^\[(.+?)\] ([\s\S]*)/);
-    if (match && USERS[match[1]]) {
-      return { sender: match[1], content: match[2] };
-    }
-    return { sender: 'たかまさ', content: msg.content };
+    // プレフィックスなし → senderフィールドまたはデフォルト
+    const sender = (msg.sender && USERS[msg.sender]) ? msg.sender : 'たかまさ';
+    return { sender, content: msg.content || '' };
   }
 
   // ── 履歴 ──────────────────────────────────────
