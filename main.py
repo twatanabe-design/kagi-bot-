@@ -11,6 +11,7 @@ import os
 import requests
 import uuid
 import json
+import threading
 from datetime import datetime as dt
 from dotenv import load_dotenv
 from property_update import is_update_command, parse_update_command, execute_update
@@ -563,16 +564,19 @@ def buken_ask(question: str, sender: str = "たかまさ") -> str:
     buken_histories[BUKEN_HISTORY_KEY].append({"role": "assistant", "content": answer})
     save_buken_message_to_gas("assistant", answer)
 
-    # タスク自動抽出（物件関連のみ、AI回答済みは登録しない）
-    try:
-        new_tasks = extract_tasks(sender, question, answer)
-        if new_tasks:
-            task_list = get_buken_tasks()
-            for task in new_tasks:
-                task_list.append(task)
-                save_task_to_gas(task)
-    except Exception:
-        pass
+    # タスク自動抽出をバックグラウンドで実行（レスポンス速度・メモリ節約）
+    def _extract_and_store():
+        try:
+            new_tasks = extract_tasks(sender, question, answer)
+            if new_tasks:
+                task_list = get_buken_tasks()
+                for task in new_tasks:
+                    task_list.append(task)
+                    save_task_to_gas(task)
+        except Exception:
+            pass
+
+    threading.Thread(target=_extract_and_store, daemon=True).start()
 
     return answer
 
