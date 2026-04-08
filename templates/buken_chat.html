@@ -13,17 +13,18 @@
     height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
   header {
     background: #1a1a2e;
     color: #fff;
-    padding: 14px 20px;
+    padding: 12px 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-shrink: 0;
   }
-  header h1 { font-size: 16px; font-weight: 600; }
+  header h1 { font-size: 15px; font-weight: 600; }
   header a { color: #aaa; font-size: 13px; text-decoration: none; }
   header a:hover { color: #fff; }
   #refresh-btn {
@@ -38,14 +39,33 @@
   }
   #refresh-btn:hover { background: #2d2d5e; color: #fff; }
   #refresh-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* メインレイアウト（チャット + TASKパネル） */
+  #main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* チャットエリア */
+  #chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   #messages {
     flex: 1;
     overflow-y: auto;
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
+
+  /* メッセージバブル */
   .msg {
     max-width: 85%;
     padding: 10px 14px;
@@ -53,11 +73,23 @@
     line-height: 1.6;
     font-size: 14px;
   }
-  .msg.user {
+  .msg.user-takamasa {
     align-self: flex-end;
     background: #1a1a2e;
     color: #fff;
     border-bottom-right-radius: 4px;
+  }
+  .msg.user-tomoko {
+    align-self: flex-end;
+    background: #065f46;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .sender-badge {
+    font-size: 11px;
+    opacity: 0.75;
+    margin-bottom: 3px;
+    font-weight: 700;
   }
   .msg.bot {
     align-self: flex-start;
@@ -66,35 +98,14 @@
     border-bottom-left-radius: 4px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
-  .msg.bot table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 8px 0;
-    font-size: 13px;
-  }
-  .msg.bot th, .msg.bot td {
-    border: 1px solid #ddd;
-    padding: 5px 8px;
-    text-align: left;
-  }
+  .msg.bot table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+  .msg.bot th, .msg.bot td { border: 1px solid #ddd; padding: 5px 8px; text-align: left; }
   .msg.bot th { background: #f5f5f5; }
-  .msg.bot h1, .msg.bot h2, .msg.bot h3 {
-    font-size: 15px;
-    margin: 8px 0 4px;
-    color: #1a1a2e;
-  }
-  .msg.bot ul, .msg.bot ol {
-    padding-left: 20px;
-    margin: 4px 0;
-  }
+  .msg.bot h1, .msg.bot h2, .msg.bot h3 { font-size: 15px; margin: 8px 0 4px; color: #1a1a2e; }
+  .msg.bot ul, .msg.bot ol { padding-left: 20px; margin: 4px 0; }
   .msg.bot p { margin: 4px 0; }
   .msg.bot strong { color: #1a1a2e; }
-  .msg.bot code {
-    background: #f0f0f0;
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 12px;
-  }
+  .msg.bot code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
   .msg.bot hr { border: none; border-top: 1px solid #eee; margin: 8px 0; }
   .msg.loading { color: #999; font-style: italic; }
   .hint {
@@ -106,41 +117,143 @@
     border-radius: 10px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.08);
   }
+
+  /* 入力エリア（2人分） */
   #input-area {
-    padding: 12px 16px;
+    padding: 10px 12px;
     background: #fff;
     border-top: 1px solid #e0e0e0;
-    display: flex;
-    gap: 8px;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
-  #input {
+  .input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .input-label {
+    font-size: 12px;
+    font-weight: 700;
+    width: 52px;
+    flex-shrink: 0;
+    padding-bottom: 9px;
+    white-space: nowrap;
+  }
+  .input-label.takamasa { color: #1a1a2e; }
+  .input-label.tomoko   { color: #065f46; }
+  .chat-input {
     flex: 1;
-    padding: 10px 14px;
+    padding: 9px 13px;
     border: 1px solid #ddd;
-    border-radius: 22px;
+    border-radius: 20px;
     font-size: 15px;
     outline: none;
     font-family: inherit;
     resize: none;
-    max-height: 120px;
+    max-height: 100px;
     line-height: 1.5;
   }
-  #input:focus { border-color: #1a1a2e; }
-  #send {
-    padding: 0 18px;
-    background: #1a1a2e;
+  .chat-input:focus { border-color: #1a1a2e; }
+  .chat-input.tomoko:focus { border-color: #065f46; }
+  .send-btn {
+    padding: 0 16px;
     color: #fff;
     border: none;
-    border-radius: 22px;
+    border-radius: 20px;
     font-size: 14px;
     cursor: pointer;
     flex-shrink: 0;
+    height: 38px;
+    transition: background 0.15s;
   }
-  #send:hover { background: #2d2d5e; }
-  #send:disabled { background: #aaa; cursor: default; }
+  .send-btn.takamasa { background: #1a1a2e; }
+  .send-btn.takamasa:hover { background: #2d2d5e; }
+  .send-btn.tomoko   { background: #065f46; }
+  .send-btn.tomoko:hover   { background: #047857; }
+  .send-btn:disabled { background: #aaa !important; cursor: default; }
 
-  /* 横向き時に縦向き表示を維持（モバイルのみ） */
+  /* TASKパネル（PCのみ） */
+  #task-panel {
+    width: 260px;
+    flex-shrink: 0;
+    border-left: 1px solid #ddd;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #task-panel-header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #task-count { font-size: 11px; opacity: 0.7; }
+  #task-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+  .task-section { margin-bottom: 2px; }
+  .task-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #666;
+    padding: 5px 14px 4px;
+    background: #ebebeb;
+    border-bottom: 1px solid #ddd;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .task-section-title.confirmed { color: #059669; background: #ecfdf5; }
+  .task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 7px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+    color: #333;
+    transition: background 0.1s;
+  }
+  .task-item:hover { background: #f5f5f5; }
+  .task-item.checked { opacity: 0.45; }
+  .task-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; cursor: pointer; }
+  .task-content { flex: 1; line-height: 1.4; }
+  .task-target { font-size: 11px; color: #888; display: block; margin-top: 2px; }
+  .task-sender { font-size: 10px; color: #bbb; display: block; margin-top: 1px; }
+  .task-empty { padding: 6px 14px; font-size: 12px; color: #ccc; }
+  #task-add-area {
+    padding: 8px 12px;
+    border-top: 1px solid #e0e0e0;
+    flex-shrink: 0;
+  }
+  #task-add-btn {
+    width: 100%;
+    padding: 7px;
+    background: none;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  #task-add-btn:hover { background: #f0f0f0; border-color: #999; color: #444; }
+
+  /* モバイルではTASKパネル非表示 */
+  @media (max-width: 768px) {
+    #task-panel { display: none; }
+  }
+
+  /* 横向きモバイル対応 */
   @media screen and (orientation: landscape) and (max-height: 500px) {
     html {
       transform: rotate(-90deg);
@@ -158,160 +271,319 @@
 <body>
 <header>
   <h1>🏠 KAGIYA 物件管理</h1>
-  <div style="display:flex; align-items:center; gap:12px;">
+  <div style="display:flex;align-items:center;gap:12px;">
     <button id="refresh-btn" onclick="refreshAll()">🔄 更新</button>
     <a href="/buken/logout">ログアウト</a>
   </div>
 </header>
 
-<div id="messages">
-</div>
+<div id="main">
+  <!-- チャットエリア -->
+  <div id="chat-area">
+    <div id="messages"></div>
+    <div id="input-area">
+      <!-- たかまさ入力 -->
+      <div class="input-row">
+        <span class="input-label takamasa">たかまさ</span>
+        <textarea id="input-takamasa" class="chat-input" rows="1" placeholder="質問または更新コマンドを入力..." autofocus></textarea>
+        <button class="send-btn takamasa" id="send-takamasa" onclick="sendMessage('たかまさ')">送信</button>
+      </div>
+      <!-- ともこ入力 -->
+      <div class="input-row">
+        <span class="input-label tomoko">ともこ</span>
+        <textarea id="input-tomoko" class="chat-input tomoko" rows="1" placeholder="質問または更新コマンドを入力..."></textarea>
+        <button class="send-btn tomoko" id="send-tomoko" onclick="sendMessage('ともこ')">送信</button>
+      </div>
+    </div>
+  </div>
 
-<div id="input-area">
-  <textarea id="input" rows="1" placeholder="質問または更新コマンドを入力..." autofocus></textarea>
-  <button id="send" onclick="sendMessage()">送信</button>
+  <!-- TASKパネル（PCのみ表示） -->
+  <div id="task-panel">
+    <div id="task-panel-header">
+      <span>📋 TASKリスト</span>
+      <span id="task-count"></span>
+    </div>
+    <div id="task-list"></div>
+    <div id="task-add-area">
+      <button id="task-add-btn" onclick="showAddTask()">＋ タスクを手動追加</button>
+    </div>
+  </div>
 </div>
 
 <script>
   marked.setOptions({ breaks: true });
 
   const messagesEl = document.getElementById('messages');
-  const inputEl = document.getElementById('input');
-  const sendBtn = document.getElementById('send');
-  const refreshBtn = document.getElementById('refresh-btn');
+  const refreshBtn  = document.getElementById('refresh-btn');
+  const taskCountEl = document.getElementById('task-count');
 
-  // 起動時に直近の会話履歴を表示
+  const USERS = {
+    'たかまさ': { msgClass: 'user-takamasa' },
+    'ともこ':   { msgClass: 'user-tomoko'   },
+  };
+
+  // ── 入力欄 IME + 自動リサイズ setup ──────────
+  const inputDefs = [
+    { sender: 'たかまさ', elId: 'input-takamasa' },
+    { sender: 'ともこ',   elId: 'input-tomoko'   },
+  ];
+  const inputStates = {};
+
+  inputDefs.forEach(({ sender, elId }) => {
+    const el = document.getElementById(elId);
+    const state = { el, imeComposing: false, justFinished: false };
+    inputStates[sender] = state;
+
+    el.addEventListener('compositionstart', () => {
+      state.imeComposing = true; state.justFinished = false;
+    });
+    el.addEventListener('compositionend', () => {
+      state.imeComposing = false; state.justFinished = true;
+      setTimeout(() => { state.justFinished = false; }, 0);
+    });
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !state.imeComposing && !state.justFinished) {
+        e.preventDefault();
+        sendMessage(sender);
+      }
+    });
+    el.addEventListener('input', () => {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    });
+  });
+
+  // ── 履歴 ──────────────────────────────────────
   async function loadHistory() {
     try {
       const res = await fetch('/buken/history');
       const data = await res.json();
       const msgs = data.messages || [];
       if (msgs.length > 0) {
-        const sep = document.createElement('div');
-        sep.className = 'hint';
-        sep.textContent = `── 直近${msgs.length}件の履歴 ──`;
-        messagesEl.appendChild(sep);
+        addSep(`── 直近${msgs.length}件の履歴 ──`);
         msgs.forEach(msg => {
-          addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot');
+          if (msg.role === 'user') {
+            addMessage(msg.content, 'user', msg.sender || 'たかまさ');
+          } else {
+            addMessage(msg.content, 'bot');
+          }
         });
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
-    } catch (e) {
-      const sep = document.createElement('div');
-      sep.className = 'hint';
-      sep.textContent = '── 履歴の取得に失敗しました ──';
-      messagesEl.appendChild(sep);
+    } catch {
+      addSep('── 履歴の取得に失敗しました ──');
     }
   }
   loadHistory();
 
-  // 🔄 更新ボタン：会話履歴を再取得して画面をリフレッシュ
-  // ※スプレッドシートデータは次の質問時に自動で最新取得されます
+  // ── タスク ────────────────────────────────────
+  let allTasks = [];
+
+  async function loadTasks() {
+    try {
+      const res = await fetch('/buken/tasks');
+      const data = await res.json();
+      allTasks = data.tasks || [];
+      renderTasks(allTasks);
+    } catch { /* silent */ }
+  }
+  loadTasks();
+
+  function renderTasks(tasks) {
+    const taskList = document.getElementById('task-list');
+    taskList.innerHTML = '';
+
+    const pending = tasks.filter(t => !t.checked);
+    if (taskCountEl) {
+      taskCountEl.textContent = pending.length > 0 ? `未対応 ${pending.length}件` : '';
+    }
+
+    const groups = [
+      { label: '確認事項',  items: tasks.filter(t => t.type === '確認事項'  && !t.checked) },
+      { label: '未確定事項', items: tasks.filter(t => t.type === '未確定事項' && !t.checked) },
+      { label: '確認済み',  items: tasks.filter(t => t.checked), isConfirmed: true },
+    ];
+
+    groups.forEach(({ label, items, isConfirmed }) => {
+      if (isConfirmed && items.length === 0) return;
+      const section = document.createElement('div');
+      section.className = 'task-section';
+
+      const title = document.createElement('div');
+      title.className = 'task-section-title' + (isConfirmed ? ' confirmed' : '');
+      title.textContent = `${label}  ${items.length}件`;
+      section.appendChild(title);
+
+      if (items.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'task-empty';
+        empty.textContent = 'なし';
+        section.appendChild(empty);
+      } else {
+        items.forEach(task => section.appendChild(makeTaskEl(task)));
+      }
+      taskList.appendChild(section);
+    });
+  }
+
+  function makeTaskEl(task) {
+    const item = document.createElement('div');
+    item.className = 'task-item' + (task.checked ? ' checked' : '');
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!task.checked;
+    cb.addEventListener('change', () => toggleTask(task.id, cb.checked));
+
+    const label = document.createElement('div');
+    label.className = 'task-content';
+    label.textContent = task.content;
+    if (task.target) {
+      const t = document.createElement('span');
+      t.className = 'task-target';
+      t.textContent = `📁 ${task.target}`;
+      label.appendChild(t);
+    }
+    if (task.sender && task.sender !== 'manual') {
+      const s = document.createElement('span');
+      s.className = 'task-sender';
+      s.textContent = `by ${task.sender}`;
+      label.appendChild(s);
+    }
+
+    item.appendChild(cb);
+    item.appendChild(label);
+    return item;
+  }
+
+  async function toggleTask(taskId, checked) {
+    try {
+      await fetch(`/buken/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checked }),
+      });
+      const task = allTasks.find(t => t.id === taskId);
+      if (task) { task.checked = checked; renderTasks(allTasks); }
+    } catch { /* silent */ }
+  }
+
+  function showAddTask() {
+    const content = prompt('タスク内容を入力してください：');
+    if (!content || !content.trim()) return;
+    const isConfirm = confirm('確認事項として追加しますか？\nOK → 確認事項　キャンセル → 未確定事項');
+    const type = isConfirm ? '確認事項' : '未確定事項';
+    (async () => {
+      try {
+        const res = await fetch('/buken/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: content.trim(), type, sender: 'manual' }),
+        });
+        const data = await res.json();
+        if (data.task) { allTasks.push(data.task); renderTasks(allTasks); }
+      } catch { alert('タスクの追加に失敗しました。'); }
+    })();
+  }
+
+  // ── 更新ボタン ────────────────────────────────
   async function refreshAll() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = '更新中...';
-
-    // 画面のメッセージをクリア
     messagesEl.innerHTML = '';
 
     try {
-      const res = await fetch('/buken/history');
-      const data = await res.json();
+      const [histRes] = await Promise.all([
+        fetch('/buken/history'),
+        loadTasks(),
+      ]);
+      const data = await histRes.json();
       const msgs = data.messages || [];
-
-      const sep = document.createElement('div');
-      sep.className = 'hint';
       const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-      sep.textContent = `── ${now} 更新 · ${msgs.length}件 ──`;
-      messagesEl.appendChild(sep);
-
+      addSep(`── ${now} 更新 · ${msgs.length}件 ──`);
       msgs.forEach(msg => {
-        addMessage(msg.content, msg.role === 'user' ? 'user' : 'bot');
+        if (msg.role === 'user') addMessage(msg.content, 'user', msg.sender || 'たかまさ');
+        else addMessage(msg.content, 'bot');
       });
       messagesEl.scrollTop = messagesEl.scrollHeight;
-    } catch (e) {
-      const sep = document.createElement('div');
-      sep.className = 'hint';
-      sep.textContent = '── 更新失敗。再度お試しください ──';
-      messagesEl.appendChild(sep);
+    } catch {
+      addSep('── 更新失敗。再度お試しください ──');
     }
 
     refreshBtn.disabled = false;
     refreshBtn.textContent = '🔄 更新';
-    inputEl.focus();
   }
 
-  // macOSのIME対策：compositionend → keydown の順で発火するため
-  // justFinishedComposing フラグで「変換確定のEnter」を無視する
-  let imeComposing = false;
-  let justFinishedComposing = false;
-
-  inputEl.addEventListener('compositionstart', () => {
-    imeComposing = true;
-    justFinishedComposing = false;
-  });
-  inputEl.addEventListener('compositionend', () => {
-    imeComposing = false;
-    justFinishedComposing = true;
-    setTimeout(() => { justFinishedComposing = false; }, 0);
-  });
-
-  // Enterで送信（Shift+Enterで改行、IME変換中・変換直後は送信しない）
-  inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !imeComposing && !justFinishedComposing) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  // テキストエリア自動リサイズ
-  inputEl.addEventListener('input', () => {
-    inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
-  });
-
-  function addMessage(text, role) {
+  // ── ユーティリティ ────────────────────────────
+  function addSep(text) {
     const div = document.createElement('div');
-    div.className = `msg ${role}`;
-    if (role === 'bot') {
-      div.innerHTML = marked.parse(text);
+    div.className = 'hint';
+    div.textContent = text;
+    messagesEl.appendChild(div);
+  }
+
+  function addMessage(text, role, sender) {
+    const div = document.createElement('div');
+    if (role === 'user') {
+      const u = USERS[sender] || USERS['たかまさ'];
+      div.className = `msg ${u.msgClass}`;
+      const badge = document.createElement('div');
+      badge.className = 'sender-badge';
+      badge.textContent = sender;
+      const content = document.createElement('div');
+      content.textContent = text;
+      div.appendChild(badge);
+      div.appendChild(content);
     } else {
-      div.textContent = text;
+      div.className = 'msg bot' + (role === 'loading' ? ' loading' : '');
+      if (role === 'loading') {
+        div.textContent = text;
+      } else {
+        div.innerHTML = marked.parse(text);
+      }
     }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return div;
   }
 
-  async function sendMessage() {
-    const text = inputEl.value.trim();
+  // ── 送信 ──────────────────────────────────────
+  let sending = false;
+
+  async function sendMessage(sender) {
+    if (sending) return;
+    const state = inputStates[sender];
+    if (!state) return;
+    const text = state.el.value.trim();
     if (!text) return;
 
-    inputEl.value = '';
-    inputEl.style.height = 'auto';
-    sendBtn.disabled = true;
+    state.el.value = '';
+    state.el.style.height = 'auto';
+    sending = true;
+    document.querySelectorAll('.send-btn').forEach(b => b.disabled = true);
 
-    addMessage(text, 'user');
-
-    const loading = addMessage('考え中...', 'bot loading');
+    addMessage(text, 'user', sender);
+    const loading = addMessage('考え中...', 'loading');
 
     try {
       const res = await fetch('/buken/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ question: text, sender }),
       });
       const data = await res.json();
       loading.remove();
       addMessage(data.answer || 'エラーが発生しました。', 'bot');
-
-    } catch (err) {
+      // タスク自動抽出が完了するまで少し待ってからリロード
+      setTimeout(loadTasks, 1500);
+    } catch {
       loading.remove();
       addMessage('通信エラーが発生しました。再度お試しください。', 'bot');
     }
 
-    sendBtn.disabled = false;
-    inputEl.focus();
+    sending = false;
+    document.querySelectorAll('.send-btn').forEach(b => b.disabled = false);
+    state.el.focus();
   }
 </script>
 </body>

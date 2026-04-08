@@ -9,6 +9,9 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 import anthropic
 import os
 import requests
+import uuid
+import json
+from datetime import datetime as dt
 from dotenv import load_dotenv
 from property_update import is_update_command, parse_update_command, execute_update
 
@@ -88,8 +91,7 @@ def generate_kai_memo_tags(memo: str) -> str:
 
 def save_kai_memo(memo: str, destination: str, tags: str) -> bool:
     """GAS経由でカイメモを保存。業務→KAGI記憶帳、プライベート→T.W. LOG"""
-    from datetime import datetime
-    now = datetime.now().strftime("%Y/%m/%d %H:%M")
+    now = dt.now().strftime("%Y/%m/%d %H:%M")
     action = "write_memo" if destination == "業務" else "write_tw_memo"
     try:
         requests.get(
@@ -300,6 +302,121 @@ BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理A
 BUKEN_HISTORY_KEY = "buken_main"
 buken_histories = {}
 
+# -----------------------------------------------
+# タスク管理（TASKパネル）
+# -----------------------------------------------
+buken_tasks: list = []
+buken_tasks_loaded: bool = False
+
+
+def load_tasks_from_gas() -> list:
+    """GASからタスク一覧を取得"""
+    try:
+        resp = requests.get(GAS_URL, params={"action": "read_tasks"}, timeout=10)
+        tasks = resp.json().get("tasks", [])
+        for t in tasks:
+            if isinstance(t.get("checked"), str):
+                t["checked"] = t["checked"].lower() == "true"
+        return tasks
+    except Exception:
+        return []
+
+
+def save_task_to_gas(task: dict):
+    """GASにタスクを1件追記"""
+    try:
+        requests.get(
+            GAS_URL,
+            params={
+                "action": "write_task",
+                "id": task["id"],
+                "type": task.get("type", "確認事項"),
+                "content": task.get("content", ""),
+                "target": task.get("target") or "",
+                "sender": task.get("sender", ""),
+                "checked": "false",
+                "created_at": task.get("created_at", ""),
+            },
+            timeout=10
+        )
+    except Exception:
+        pass
+
+
+def update_task_in_gas(task_id: str, checked: bool):
+    """GASのタスクの確認済みフラグを更新"""
+    try:
+        requests.get(
+            GAS_URL,
+            params={"action": "update_task", "id": task_id, "checked": "true" if checked else "false"},
+            timeout=10
+        )
+    except Exception:
+        pass
+
+
+def get_buken_tasks() -> list:
+    """タスク一覧を取得（初回のみGASから読み込み）"""
+    global buken_tasks, buken_tasks_loaded
+    if not buken_tasks_loaded:
+        buken_tasks = load_tasks_from_gas()
+        buken_tasks_loaded = True
+    return buken_tasks
+
+
+def extract_tasks(sender: str, message: str, answer: str) -> list:
+    """
+    会話からAIが未解決の確認事項・未確定事項を抽出。
+    物件関連の話題のみ対象。AIが既に回答済みの内容は登録しない。
+    """
+    try:
+        result = anthropic_client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=400,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "以下の会話から、AIがまだ解決できていない確認事項・未確定事項をJSON配列で抽出してください。\n\n"
+                    "【抽出ルール】\n"
+                    "- 物件に関する話題のみ抽出する\n"
+                    "- AIの回答で既に解決・回答済みの内容は抽出しない\n"
+                    "- 確認待ち・決定待ち・情報不足の事項のみ抽出する\n"
+                    "- 日常的な会話・雑談はタスクにしない\n"
+                    "- 抽出がない場合は空配列 [] を返す\n\n"
+                    "【タスクタイプ】\n"
+                    '- "確認事項"：確認が必要な事項（書類受領確認、情報確認など）\n'
+                    '- "未確定事項"：まだ決まっていない事項（日程未定、情報不足など）\n\n'
+                    "【出力形式（JSONのみ）】\n"
+                    '[{"type": "確認事項", "content": "タスク内容", "target": "対象物件名またはnull"}]\n\n'
+                    f"ユーザーの発言：{message}\n"
+                    f"AIの回答：{answer[:500]}\n\n"
+                    "JSONのみ返してください。"
+                )
+            }]
+        )
+        import re as _re
+        text = result.content[0].text.strip()
+        m = _re.search(r'\[.*\]', text, _re.DOTALL)
+        if not m:
+            return []
+        tasks_raw = json.loads(m.group())
+        now = dt.now().strftime("%Y/%m/%d %H:%M")
+        tasks = []
+        for t in tasks_raw:
+            if isinstance(t, dict) and t.get("content"):
+                tasks.append({
+                    "id": str(uuid.uuid4()),
+                    "type": t.get("type", "確認事項"),
+                    "content": t["content"],
+                    "target": t.get("target") or None,
+                    "sender": sender,
+                    "checked": False,
+                    "created_at": now,
+                })
+        return tasks
+    except Exception:
+        return []
+
 
 def load_buken_history_from_gas(limit=50) -> list:
     """GASから物件管理履歴を読み込む（サーバー再起動時に復元）"""
@@ -372,10 +489,11 @@ def build_sheet_context(rows=None) -> str:
         return f"※スプレッドシートデータ取得失敗: {str(e)}"
 
 
-def buken_ask(question: str) -> str:
+def buken_ask(question: str, sender: str = "たかまさ") -> str:
     """
     物件管理AIの共通処理（全デバイス共通履歴）。
     question: ユーザー入力
+    sender: 送信者名（たかまさ / ともこ）
     戻り値: Claudeの回答文字列
     """
     # 初回（サーバー再起動後）はGASから履歴を復元
@@ -404,7 +522,8 @@ def buken_ask(question: str) -> str:
     if update_result:
         user_content += f"\n\n（システム実行結果: {update_result}）"
 
-    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content})
+    # 履歴にsenderも保存（表示用）
+    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content, "sender": sender})
     if len(buken_histories[BUKEN_HISTORY_KEY]) > 50:
         buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-50:]
 
@@ -414,12 +533,15 @@ def buken_ask(question: str) -> str:
     # スプレッドシートデータをsystemに渡す（キャッシュ済みrowsを使い回し）
     sheet_context = build_sheet_context(rows=cached_rows)
 
+    # Claudeにはrole+contentのみ渡す（senderは除外）
+    claude_messages = [{"role": m["role"], "content": m["content"]} for m in buken_histories[BUKEN_HISTORY_KEY]]
+
     try:
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
             system=BUKEN_SYSTEM_PROMPT + "\n\n" + sheet_context,
-            messages=buken_histories[BUKEN_HISTORY_KEY],
+            messages=claude_messages,
         )
         answer = response.content[0].text
     except Exception as e:
@@ -427,6 +549,18 @@ def buken_ask(question: str) -> str:
 
     buken_histories[BUKEN_HISTORY_KEY].append({"role": "assistant", "content": answer})
     save_buken_message_to_gas("assistant", answer)
+
+    # タスク自動抽出（物件関連のみ、AI回答済みは登録しない）
+    try:
+        new_tasks = extract_tasks(sender, question, answer)
+        if new_tasks:
+            task_list = get_buken_tasks()
+            for task in new_tasks:
+                task_list.append(task)
+                save_task_to_gas(task)
+    except Exception:
+        pass
+
     return answer
 
 
@@ -445,12 +579,58 @@ def buken_chat():
     if not session.get("buken_auth"):
         return jsonify({"answer": "セッションが切れました。再ログインしてください。"}), 401
 
-    question = (request.json or {}).get("question", "").strip()
+    data = request.json or {}
+    question = data.get("question", "").strip()
+    sender = data.get("sender", "たかまさ")
+    if sender not in ["たかまさ", "ともこ"]:
+        sender = "たかまさ"
     if not question:
         return jsonify({"answer": "質問を入力してください。"})
 
-    answer = buken_ask(question)
+    answer = buken_ask(question, sender)
     return jsonify({"answer": answer})
+
+
+@app.route("/buken/tasks", methods=["GET"])
+def buken_tasks_get():
+    if not session.get("buken_auth"):
+        return jsonify({"tasks": []}), 401
+    return jsonify({"tasks": get_buken_tasks()})
+
+
+@app.route("/buken/tasks", methods=["POST"])
+def buken_tasks_post():
+    if not session.get("buken_auth"):
+        return jsonify({"error": "unauthorized"}), 401
+    data = request.json or {}
+    task = {
+        "id": str(uuid.uuid4()),
+        "type": data.get("type", "確認事項"),
+        "content": data.get("content", "").strip(),
+        "target": data.get("target") or None,
+        "sender": data.get("sender", "manual"),
+        "checked": False,
+        "created_at": dt.now().strftime("%Y/%m/%d %H:%M"),
+    }
+    if not task["content"]:
+        return jsonify({"error": "content is required"}), 400
+    get_buken_tasks().append(task)
+    save_task_to_gas(task)
+    return jsonify({"task": task})
+
+
+@app.route("/buken/tasks/<task_id>", methods=["PATCH"])
+def buken_tasks_patch(task_id):
+    if not session.get("buken_auth"):
+        return jsonify({"error": "unauthorized"}), 401
+    data = request.json or {}
+    checked = bool(data.get("checked", False))
+    for task in get_buken_tasks():
+        if task["id"] == task_id:
+            task["checked"] = checked
+            update_task_in_gas(task_id, checked)
+            return jsonify({"task": task})
+    return jsonify({"error": "not found"}), 404
 
 @app.route("/callback", methods=['POST'])
 def callback():
