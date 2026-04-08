@@ -85,6 +85,12 @@
     color: #fff;
     border-bottom-right-radius: 4px;
   }
+  .msg.user-device {
+    align-self: flex-end;
+    background: #E07000;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
   .sender-badge {
     font-size: 11px;
     opacity: 0.75;
@@ -160,11 +166,14 @@
   .send-btn.takamasa:hover { background: #6A4D96; }
   .send-btn.tomoko   { background: #0097A7; }
   .send-btn.tomoko:hover   { background: #00838F; }
+  .send-btn.device   { background: #E07000; }
+  .send-btn.device:hover   { background: #C46200; }
   .send-btn:disabled { background: #aaa !important; cursor: default; }
 
-  /* モバイル：ともこボタン非表示・たかまさボタン全幅 */
+  /* モバイル：ともこ・デバイスボタン非表示・たかまさボタン全幅 */
   @media (max-width: 768px) {
     #send-tomoko { display: none; }
+    #send-device { display: none; }
     #send-takamasa { flex: 1; }
   }
 
@@ -280,6 +289,7 @@
       <div id="btn-row">
         <button class="send-btn takamasa" id="send-takamasa" onclick="sendMessage('たかまさ')">たかまさとして送信</button>
         <button class="send-btn tomoko" id="send-tomoko" onclick="sendMessage('ともこ')">ともことして送信</button>
+        <button class="send-btn device" id="send-device" onclick="sendMessage('デバイス')">デバイスとして送信</button>
       </div>
     </div>
   </div>
@@ -307,6 +317,7 @@
   const USERS = {
     'たかまさ': { msgClass: 'user-takamasa' },
     'ともこ':   { msgClass: 'user-tomoko'   },
+    'デバイス': { msgClass: 'user-device'   },
   };
 
   // ── 入力欄 IME + 自動リサイズ setup ──────────

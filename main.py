@@ -285,6 +285,15 @@ BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理A
 - ❌ エラーなら「更新に失敗しました：（理由）」と明記する
 - 絶対に「了解」だけで済ませず、更新結果を報告すること
 
+【送信者について】
+会話の送信者は「たかまさ」「ともこ」「デバイス」の3種類。
+
+- **たかまさ・ともこ**：通常の質問・報告として処理する
+- **デバイス**：PC・システム・自動化ツールからの送信。指示・依頼として扱い、**最優先で処理**すること。
+  - 曖昧な点があっても推測して即実行・回答する
+  - 「了解しました」より先に結果・回答を示す
+  - タスクとして登録が必要な内容は必ずTASKに追加する
+
 【スタンス】
 - 問題・矛盾があれば率直に指摘する
 - 問題なければ「了解」「記録しました」など短く返す
@@ -522,13 +531,17 @@ def buken_ask(question: str, sender: str = "たかまさ") -> str:
     if update_result:
         user_content += f"\n\n（システム実行結果: {update_result}）"
 
+    # Claude向けメッセージにsenderラベルを付加
+    sender_label = f"[{sender}] " if sender != "たかまさ" else ""
+    claude_content = sender_label + user_content
+
     # 履歴にsenderも保存（表示用）
-    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content, "sender": sender})
+    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": claude_content, "sender": sender})
     if len(buken_histories[BUKEN_HISTORY_KEY]) > 50:
         buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-50:]
 
     # GASに保存
-    save_buken_message_to_gas("user", user_content)
+    save_buken_message_to_gas("user", claude_content)
 
     # スプレッドシートデータをsystemに渡す（キャッシュ済みrowsを使い回し）
     sheet_context = build_sheet_context(rows=cached_rows)
@@ -582,7 +595,7 @@ def buken_chat():
     data = request.json or {}
     question = data.get("question", "").strip()
     sender = data.get("sender", "たかまさ")
-    if sender not in ["たかまさ", "ともこ"]:
+    if sender not in ["たかまさ", "ともこ", "デバイス"]:
         sender = "たかまさ"
     if not question:
         return jsonify({"answer": "質問を入力してください。"})
