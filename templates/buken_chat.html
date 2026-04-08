@@ -118,7 +118,7 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.08);
   }
 
-  /* 入力エリア（2人分） */
+  /* 入力エリア */
   #input-area {
     padding: 10px 12px;
     background: #fff;
@@ -128,23 +128,8 @@
     flex-direction: column;
     gap: 7px;
   }
-  .input-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-  }
-  .input-label {
-    font-size: 12px;
-    font-weight: 700;
-    width: 52px;
-    flex-shrink: 0;
-    padding-bottom: 9px;
-    white-space: nowrap;
-  }
-  .input-label.takamasa { color: #1a1a2e; }
-  .input-label.tomoko   { color: #065f46; }
-  .chat-input {
-    flex: 1;
+  #chat-input {
+    width: 100%;
     padding: 9px 13px;
     border: 1px solid #ddd;
     border-radius: 20px;
@@ -155,17 +140,20 @@
     max-height: 100px;
     line-height: 1.5;
   }
-  .chat-input:focus { border-color: #1a1a2e; }
-  .chat-input.tomoko:focus { border-color: #065f46; }
+  #chat-input:focus { border-color: #1a1a2e; }
+  #btn-row {
+    display: flex;
+    gap: 8px;
+  }
   .send-btn {
-    padding: 0 16px;
+    flex: 1;
+    padding: 9px 0;
     color: #fff;
     border: none;
     border-radius: 20px;
     font-size: 14px;
+    font-weight: 600;
     cursor: pointer;
-    flex-shrink: 0;
-    height: 38px;
     transition: background 0.15s;
   }
   .send-btn.takamasa { background: #1a1a2e; }
@@ -282,17 +270,10 @@
   <div id="chat-area">
     <div id="messages"></div>
     <div id="input-area">
-      <!-- たかまさ入力 -->
-      <div class="input-row">
-        <span class="input-label takamasa">たかまさ</span>
-        <textarea id="input-takamasa" class="chat-input" rows="1" placeholder="質問または更新コマンドを入力..." autofocus></textarea>
-        <button class="send-btn takamasa" id="send-takamasa" onclick="sendMessage('たかまさ')">送信</button>
-      </div>
-      <!-- ともこ入力 -->
-      <div class="input-row">
-        <span class="input-label tomoko">ともこ</span>
-        <textarea id="input-tomoko" class="chat-input tomoko" rows="1" placeholder="質問または更新コマンドを入力..."></textarea>
-        <button class="send-btn tomoko" id="send-tomoko" onclick="sendMessage('ともこ')">送信</button>
+      <textarea id="chat-input" rows="1" placeholder="質問または更新コマンドを入力..." autofocus></textarea>
+      <div id="btn-row">
+        <button class="send-btn takamasa" id="send-takamasa" onclick="sendMessage('たかまさ')">たかまさとして送信</button>
+        <button class="send-btn tomoko" id="send-tomoko" onclick="sendMessage('ともこ')">ともことして送信</button>
       </div>
     </div>
   </div>
@@ -323,34 +304,28 @@
   };
 
   // ── 入力欄 IME + 自動リサイズ setup ──────────
-  const inputDefs = [
-    { sender: 'たかまさ', elId: 'input-takamasa' },
-    { sender: 'ともこ',   elId: 'input-tomoko'   },
-  ];
-  const inputStates = {};
+  const inputEl = document.getElementById('chat-input');
+  let imeComposing = false;
+  let justFinished = false;
 
-  inputDefs.forEach(({ sender, elId }) => {
-    const el = document.getElementById(elId);
-    const state = { el, imeComposing: false, justFinished: false };
-    inputStates[sender] = state;
-
-    el.addEventListener('compositionstart', () => {
-      state.imeComposing = true; state.justFinished = false;
-    });
-    el.addEventListener('compositionend', () => {
-      state.imeComposing = false; state.justFinished = true;
-      setTimeout(() => { state.justFinished = false; }, 0);
-    });
-    el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !state.imeComposing && !state.justFinished) {
-        e.preventDefault();
-        sendMessage(sender);
-      }
-    });
-    el.addEventListener('input', () => {
-      el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
-    });
+  inputEl.addEventListener('compositionstart', () => {
+    imeComposing = true; justFinished = false;
+  });
+  inputEl.addEventListener('compositionend', () => {
+    imeComposing = false; justFinished = true;
+    setTimeout(() => { justFinished = false; }, 0);
+  });
+  // Enter で最後に使ったsenderとして送信（デフォルト：たかまさ）
+  let lastSender = 'たかまさ';
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !imeComposing && !justFinished) {
+      e.preventDefault();
+      sendMessage(lastSender);
+    }
+  });
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
   });
 
   // ── 履歴 ──────────────────────────────────────
@@ -552,13 +527,12 @@
 
   async function sendMessage(sender) {
     if (sending) return;
-    const state = inputStates[sender];
-    if (!state) return;
-    const text = state.el.value.trim();
+    const text = inputEl.value.trim();
     if (!text) return;
 
-    state.el.value = '';
-    state.el.style.height = 'auto';
+    lastSender = sender;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
     sending = true;
     document.querySelectorAll('.send-btn').forEach(b => b.disabled = true);
 
@@ -583,7 +557,7 @@
 
     sending = false;
     document.querySelectorAll('.send-btn').forEach(b => b.disabled = false);
-    state.el.focus();
+    inputEl.focus();
   }
 </script>
 </body>
