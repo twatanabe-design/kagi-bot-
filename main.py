@@ -536,23 +536,25 @@ def buken_ask(question: str, sender: str = "たかまさ") -> str:
     if update_result:
         user_content += f"\n\n（システム実行結果: {update_result}）"
 
-    # Claude向けメッセージにsenderラベルを付加
-    sender_label = f"[{sender}] " if sender != "たかまさ" else ""
-    claude_content = sender_label + user_content
-
-    # 履歴にsenderも保存（表示用）
-    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": claude_content, "sender": sender})
+    # 履歴・GASにはプレフィックスなしで保存（表示用）
+    buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content, "sender": sender})
     if len(buken_histories[BUKEN_HISTORY_KEY]) > 50:
         buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-50:]
 
-    # GASに保存
-    save_buken_message_to_gas("user", claude_content)
+    save_buken_message_to_gas("user", user_content)
 
     # スプレッドシートデータをsystemに渡す（キャッシュ済みrowsを使い回し）
     sheet_context = build_sheet_context(rows=cached_rows)
 
-    # Claudeにはrole+contentのみ渡す（senderは除外）
-    claude_messages = [{"role": m["role"], "content": m["content"]} for m in buken_histories[BUKEN_HISTORY_KEY]]
+    # Claudeへの送信時だけ [sender] ラベルを付加（表示には使わない）
+    sender_label = f"[{sender}] " if sender != "たかまさ" else ""
+    claude_messages = []
+    for m in buken_histories[BUKEN_HISTORY_KEY]:
+        if m["role"] == "user":
+            lbl = f"[{m.get('sender', 'たかまさ')}] " if m.get('sender', 'たかまさ') != "たかまさ" else ""
+            claude_messages.append({"role": "user", "content": lbl + m["content"]})
+        else:
+            claude_messages.append({"role": m["role"], "content": m["content"]})
 
     try:
         response = anthropic_client.messages.create(

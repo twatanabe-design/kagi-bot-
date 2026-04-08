@@ -345,21 +345,10 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
   });
 
-  // ── 履歴メッセージのsender・content解析 ────────
-  // content の [sender] プレフィックスから送信者を復元する
-  // (サーバー再起動後はGASからsenderなしで復元されるため)
+  // ── 履歴メッセージのsender解析 ────────────────
+  // 履歴にはプレフィックスなしで保存されているので、senderフィールドを使うだけ
+  // (サーバー再起動後はsenderフィールドが消えるためデフォルトはたかまさ)
   function parseMsgSender(msg) {
-    // たかまさ以外のsender候補
-    const otherSenders = ['デバイス', 'ともこ'];
-
-    // [sender] プレフィックスを優先チェック（startsWith で確実に検出）
-    for (const s of otherSenders) {
-      const prefix = `[${s}] `;
-      if (msg.content && msg.content.startsWith(prefix)) {
-        return { sender: s, content: msg.content.slice(prefix.length) };
-      }
-    }
-    // プレフィックスなし → senderフィールドまたはデフォルト
     const sender = (msg.sender && USERS[msg.sender]) ? msg.sender : 'たかまさ';
     return { sender, content: msg.content || '' };
   }
