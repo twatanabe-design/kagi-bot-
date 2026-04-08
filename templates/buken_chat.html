@@ -345,6 +345,23 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
   });
 
+  // ── 履歴メッセージのsender・content解析 ────────
+  // サーバー再起動後はGASからsenderなしで復元されるため、
+  // content の [sender] プレフィックスからsenderを復元する
+  function parseMsgSender(msg) {
+    if (msg.sender && USERS[msg.sender]) {
+      // senderフィールドあり → プレフィックスのみ除去
+      const content = msg.content.replace(/^\[.+?\] /, '');
+      return { sender: msg.sender, content };
+    }
+    // senderフィールドなし → プレフィックスから復元
+    const match = msg.content.match(/^\[(.+?)\] ([\s\S]*)/);
+    if (match && USERS[match[1]]) {
+      return { sender: match[1], content: match[2] };
+    }
+    return { sender: 'たかまさ', content: msg.content };
+  }
+
   // ── 履歴 ──────────────────────────────────────
   async function loadHistory() {
     try {
@@ -355,7 +372,8 @@
         addSep(`── 直近${msgs.length}件の履歴 ──`);
         msgs.forEach(msg => {
           if (msg.role === 'user') {
-            addMessage(msg.content, 'user', msg.sender || 'たかまさ');
+            const { sender, content } = parseMsgSender(msg);
+            addMessage(content, 'user', sender);
           } else {
             addMessage(msg.content, 'bot');
           }
@@ -494,8 +512,12 @@
       const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
       addSep(`── ${now} 更新 · ${msgs.length}件 ──`);
       msgs.forEach(msg => {
-        if (msg.role === 'user') addMessage(msg.content, 'user', msg.sender || 'たかまさ');
-        else addMessage(msg.content, 'bot');
+        if (msg.role === 'user') {
+          const { sender, content } = parseMsgSender(msg);
+          addMessage(content, 'user', sender);
+        } else {
+          addMessage(msg.content, 'bot');
+        }
       });
       messagesEl.scrollTop = messagesEl.scrollHeight;
     } catch {
