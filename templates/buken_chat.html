@@ -75,13 +75,13 @@
   }
   .msg.user-takamasa {
     align-self: flex-end;
-    background: #1a1a2e;
+    background: #7B5EA7;
     color: #fff;
     border-bottom-right-radius: 4px;
   }
   .msg.user-tomoko {
     align-self: flex-end;
-    background: #065f46;
+    background: #0097A7;
     color: #fff;
     border-bottom-right-radius: 4px;
   }
@@ -156,11 +156,17 @@
     cursor: pointer;
     transition: background 0.15s;
   }
-  .send-btn.takamasa { background: #1a1a2e; }
-  .send-btn.takamasa:hover { background: #2d2d5e; }
-  .send-btn.tomoko   { background: #065f46; }
-  .send-btn.tomoko:hover   { background: #047857; }
+  .send-btn.takamasa { background: #7B5EA7; }
+  .send-btn.takamasa:hover { background: #6A4D96; }
+  .send-btn.tomoko   { background: #0097A7; }
+  .send-btn.tomoko:hover   { background: #00838F; }
   .send-btn:disabled { background: #aaa !important; cursor: default; }
+
+  /* モバイル：ともこボタン非表示・たかまさボタン全幅 */
+  @media (max-width: 768px) {
+    #send-tomoko { display: none; }
+    #send-takamasa { flex: 1; }
+  }
 
   /* TASKパネル（PCのみ） */
   #task-panel {
