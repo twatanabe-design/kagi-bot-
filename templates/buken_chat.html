@@ -215,7 +215,12 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
-  .task-section-title.confirmed { color: #059669; background: #ecfdf5; }
+  .task-section-title.confirmed {
+    color: #059669; background: #ecfdf5; cursor: pointer; user-select: none;
+  }
+  .task-section-title.confirmed:hover { background: #d1fae5; }
+  .confirmed-toggle { float: right; font-size: 10px; opacity: 0.7; }
+  .confirmed-body.hidden { display: none; }
   .task-item {
     display: flex;
     align-items: flex-start;
@@ -395,6 +400,7 @@
 
   // ── タスク ────────────────────────────────────
   let allTasks = [];
+  let confirmedOpen = false; // 確認済みセクションの開閉状態（デフォルト：非表示）
 
   async function loadTasks() {
     try {
@@ -428,16 +434,38 @@
 
       const title = document.createElement('div');
       title.className = 'task-section-title' + (isConfirmed ? ' confirmed' : '');
-      title.textContent = `${label}  ${items.length}件`;
-      section.appendChild(title);
 
-      if (items.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'task-empty';
-        empty.textContent = 'なし';
-        section.appendChild(empty);
+      if (isConfirmed) {
+        // 確認済みセクションは折りたたみ可能
+        const toggle = document.createElement('span');
+        toggle.className = 'confirmed-toggle';
+        toggle.textContent = confirmedOpen ? '▲ 非表示' : '▼ 表示';
+        title.textContent = `${label}  ${items.length}件  `;
+        title.appendChild(toggle);
+
+        const body = document.createElement('div');
+        body.className = 'confirmed-body' + (confirmedOpen ? '' : ' hidden');
+        items.forEach(task => body.appendChild(makeTaskEl(task)));
+
+        title.addEventListener('click', () => {
+          confirmedOpen = !confirmedOpen;
+          body.classList.toggle('hidden', !confirmedOpen);
+          toggle.textContent = confirmedOpen ? '▲ 非表示' : '▼ 表示';
+        });
+
+        section.appendChild(title);
+        section.appendChild(body);
       } else {
-        items.forEach(task => section.appendChild(makeTaskEl(task)));
+        title.textContent = `${label}  ${items.length}件`;
+        section.appendChild(title);
+        if (items.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'task-empty';
+          empty.textContent = 'なし';
+          section.appendChild(empty);
+        } else {
+          items.forEach(task => section.appendChild(makeTaskEl(task)));
+        }
       }
       taskList.appendChild(section);
     });
