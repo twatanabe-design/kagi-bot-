@@ -346,11 +346,27 @@
   });
 
   // ── 履歴メッセージのsender解析 ────────────────
-  // 履歴にはプレフィックスなしで保存されているので、senderフィールドを使うだけ
-  // (サーバー再起動後はsenderフィールドが消えるためデフォルトはたかまさ)
+  // 優先順位：① senderフィールド ② [sender]プレフィックス（旧データ互換）③ たかまさ
   function parseMsgSender(msg) {
-    const sender = (msg.sender && USERS[msg.sender]) ? msg.sender : 'たかまさ';
-    return { sender, content: msg.content || '' };
+    const raw = msg.content || '';
+
+    // ① senderフィールドが有効な場合はそちらを優先
+    if (msg.sender && USERS[msg.sender]) {
+      return { sender: msg.sender, content: raw };
+    }
+
+    // ② GAS復元データ（senderなし）用：[sender]プレフィックスから復元
+    //    indexOf === 0 で先頭一致を確実に検出（正規表現より確実）
+    const knownSenders = ['デバイス', 'ともこ'];
+    for (const s of knownSenders) {
+      const prefix = '[' + s + '] ';
+      if (raw.indexOf(prefix) === 0) {
+        return { sender: s, content: raw.slice(prefix.length) };
+      }
+    }
+
+    // ③ デフォルト
+    return { sender: 'たかまさ', content: raw };
   }
 
   // ── 履歴 ──────────────────────────────────────
