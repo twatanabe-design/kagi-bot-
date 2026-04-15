@@ -60,6 +60,9 @@ VALUE_MAP = {
 
 def is_update_command(text: str) -> bool:
     """更新コマンドかどうかを判定"""
+    # 補正依頼系はスプレッドシート更新なし → 更新コマンドとして扱わない
+    if "補正依頼" in text:
+        return False
     # 明示的な更新指示
     if re.search(r"更新|変更|にして|に変えて|済みに|受領済|戻して|もどして|未着|未受領|審査終了|認定済|交付済", text):
         return True
