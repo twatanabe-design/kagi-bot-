@@ -614,19 +614,29 @@
     const loading = addMessage('考え中...', 'loading');
 
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60000); // 60秒タイムアウト
       const res = await fetch('/buken/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: text, sender }),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data = await res.json();
       loading.remove();
       addMessage(data.answer || 'エラーが発生しました。', 'bot');
       // タスク自動抽出が完了するまで少し待ってからリロード
       setTimeout(loadTasks, 1500);
-    } catch {
+    } catch (e) {
       loading.remove();
-      addMessage('通信エラーが発生しました。再度お試しください。', 'bot');
+      const msg = e.name === 'AbortError'
+        ? '⏱ タイムアウト（60秒）。サーバーが混んでいます。再度お試しください。'
+        : `通信エラー: ${e.message}。再度お試しください。`;
+      addMessage(msg, 'bot');
     }
 
     sending = false;
