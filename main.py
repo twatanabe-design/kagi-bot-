@@ -14,7 +14,7 @@ import json
 import threading
 from datetime import datetime as dt
 from dotenv import load_dotenv
-from property_update import is_update_command, parse_update_command, execute_update
+# property_update は将来の参考用として保持（自動更新は無効化）
 
 load_dotenv()
 
@@ -280,11 +280,15 @@ BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理A
   - 見つかった場合は「📝 メモ（会話履歴より）」として明示して回答に含める
   - 見つからない場合は省略してよい
 
-【スプレッドシート更新コマンドへの回答ルール】
-ユーザーの入力に「（システム実行結果: ...）」が含まれている場合、必ずその内容を回答に含めること：
-- ✅ 成功なら「〇〇を受領済みに更新しました」と明記する
-- ❌ エラーなら「更新に失敗しました：（理由）」と明記する
-- 絶対に「了解」だけで済ませず、更新結果を報告すること
+【スプレッドシートとチャット履歴の差分確認ルール】
+スプレッドシートデータ（末尾の物件データ）と会話履歴を突き合わせ、差分があれば報告する。
+- チャット履歴に「○○邸の確認申請が交付済みになった」「補正送信した」などの状態変化の記録がある
+- かつスプレッドシートがまだ古い値のまま → 以下の形式で報告する：
+  「⚠️ 差分あり（会話履歴では更新済みだがスプレッドシートに未反映の可能性）」
+  | 物件 | 項目 | スプレッドシート | 会話履歴 |
+  として表形式で示す
+- 差分検出は質問・報告に関係する物件のみ対象でよい（毎回全件チェック不要）
+- スプレッドシートの更新は渡辺さんが手動で行う。Claudeは更新しない。
 
 【送信者について】
 会話の送信者は「たかまさ」「ともこ」「デバイス」の3種類。
@@ -522,21 +526,8 @@ def buken_ask(question: str, sender: str = "たかまさ") -> str:
     except Exception:
         pass
 
-    # 更新コマンドなら先に実行（キャッシュ済みrowsを渡して二重フェッチ防止）
-    update_result = None
-    if is_update_command(question):
-        parsed = parse_update_command(question)
-        if parsed:
-            update_result = execute_update(**parsed, rows=cached_rows)
-        else:
-            update_result = "⚠️ 更新内容を解析できませんでした。例：「中島邸の構造図を受領済みに更新して」"
-
-    # ユーザーメッセージ（更新結果があれば付加）
-    user_content = question
-    if update_result:
-        user_content += f"\n\n（システム実行結果: {update_result}）"
-
     # 履歴・GASにはプレフィックスなしで保存（表示用）
+    user_content = question
     buken_histories[BUKEN_HISTORY_KEY].append({"role": "user", "content": user_content, "sender": sender})
     if len(buken_histories[BUKEN_HISTORY_KEY]) > 50:
         buken_histories[BUKEN_HISTORY_KEY] = buken_histories[BUKEN_HISTORY_KEY][-50:]
