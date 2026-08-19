@@ -12,11 +12,19 @@ import time
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from PIL import Image
+import pillow_heif
+
+# ChromeやFirefoxはHEIC/HEIFを表示できないため、PillowでHEICを開けるようにしておく
+pillow_heif.register_heif_opener()
 
 # 対象フォルダ（05_書庫/99施工事例）のGoogleドライブID
 GALLERY_FOLDER_ID = os.environ.get("GALLERY_FOLDER_ID", "1Iu3PVPdh9TdpO1dnO9nR0SH2y1gdvHqI")
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+
+# ブラウザが直接表示できないため、配信時にJPEGへ変換する形式
+HEIC_MIMETYPES = {"image/heic", "image/heif"}
 
 CACHE_TTL_SEC = 300  # 5分キャッシュ（Drive APIの呼び出しを抑える）
 _cache = {"data": None, "at": 0}
@@ -81,9 +89,10 @@ def list_gallery(force_refresh=False):
 
 
 def get_image_bytes(file_id):
-    """指定ファイルIDの画像バイナリとMIMEタイプを取得"""
+    """指定ファイルIDの画像バイナリとMIMEタイプを取得（HEIC/HEIFはJPEGに変換して返す）"""
     service = _get_service()
     meta = service.files().get(fileId=file_id, fields="mimeType").execute()
+    mimetype = meta.get("mimeType", "application/octet-stream")
 
     request = service.files().get_media(fileId=file_id)
     buf = io.BytesIO()
@@ -91,5 +100,19 @@ def get_image_bytes(file_id):
     done = False
     while not done:
         _, done = downloader.next_chunk()
+    data = buf.getvalue()
 
-    return buf.getvalue(), meta.get("mimeType", "application/octet-stream")
+    if mimetype in HEIC_MIMETYPES:
+        data, mimetype = _convert_to_jpeg(data)
+
+    return data, mimetype
+
+
+def _convert_to_jpeg(data):
+    """HEIC/HEIFのバイナリをJPEGに変換（ブラウザで直接表示できるように）"""
+    image = Image.open(io.BytesIO(data))
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=88)
+    return out.getvalue(), "image/jpeg"
