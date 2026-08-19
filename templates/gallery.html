@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KAGIYA 施工事例ギャラリー</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+         background: #f5f5f7; margin: 0; color: #1a1a2e; }
+  header { background: #1a1a2e; color: #fff; padding: 20px 24px;
+           display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; }
+  header a { color: #cfd2ff; font-size: 13px; text-decoration: none; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+  .property { margin-bottom: 40px; }
+  .property h2 { font-size: 16px; border-left: 4px solid #1a1a2e; padding-left: 10px; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .grid img { width: 100%; height: 160px; object-fit: cover; border-radius: 8px;
+              background: #eee; display: block; }
+  .empty { color: #888; font-size: 14px; padding: 40px 0; text-align: center; }
+  .error { color: #c0392b; background: #fdecea; padding: 14px; border-radius: 8px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📷 KAGIYA 施工事例ギャラリー</h1>
+  <a href="/gallery/logout">ログアウト</a>
+</header>
+<main>
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  {% if properties %}
+    {% for property in properties %}
+    <section class="property">
+      <h2>{{ property.name }}</h2>
+      {% if property.files %}
+      <div class="grid">
+        {% for file in property.files %}
+        <img src="/gallery/image/{{ file.id }}" alt="{{ file.name }}" loading="lazy">
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">写真がまだありません</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  {% elif not error %}
+    <p class="empty">物件フォルダがまだありません</p>
+  {% endif %}
+</main>
+</body>
+</html>

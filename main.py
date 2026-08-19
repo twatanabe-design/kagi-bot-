@@ -1,4 +1,4 @@
-from flask import Flask, request, abort, session, redirect, render_template, jsonify
+from flask import Flask, request, abort, session, redirect, render_template, jsonify, Response
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -255,6 +255,76 @@ def buken_login():
 def buken_logout():
     session.pop("buken_auth", None)
     return redirect("/buken/login")
+
+
+# -----------------------------------------------
+# 施工事例ギャラリー（/gallery）
+# -----------------------------------------------
+import gallery
+
+GALLERY_PASSWORD = os.environ.get("GALLERY_PASSWORD", "kagiya2024")
+
+@app.route("/gallery")
+def gallery_index():
+    if not session.get("gallery_auth"):
+        return redirect("/gallery/login")
+    try:
+        properties = gallery.list_gallery()
+        error = None
+    except Exception as e:
+        properties = []
+        error = f"Googleドライブの読み込みに失敗しました：{e}"
+    return render_template("gallery.html", properties=properties, error=error)
+
+@app.route("/gallery/login", methods=["GET", "POST"])
+def gallery_login():
+    error = False
+    if request.method == "POST":
+        if request.form.get("password") == GALLERY_PASSWORD:
+            session["gallery_auth"] = True
+            return redirect("/gallery")
+        error = True
+    return f"""<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KAGIYA 施工事例ギャラリー - ログイン</title>
+<style>
+  body {{ font-family: -apple-system, sans-serif; background: #f0f2f5;
+         display: flex; justify-content: center; align-items: center; height: 100dvh; }}
+  .box {{ background: #fff; padding: 40px; border-radius: 12px;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 300px; }}
+  h2 {{ color: #1a1a2e; margin-bottom: 24px; font-size: 18px; text-align: center; }}
+  input {{ width: 100%; padding: 10px 14px; border: 1px solid #ddd;
+           border-radius: 8px; font-size: 15px; margin-bottom: 12px; }}
+  button {{ width: 100%; padding: 11px; background: #1a1a2e; color: #fff;
+            border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }}
+  button:hover {{ background: #2d2d5e; }}
+  .err {{ color: #e00; font-size: 13px; margin-bottom: 10px; text-align: center; }}
+</style></head>
+<body><div class="box">
+  <h2>📷 KAGIYA 施工事例ギャラリー</h2>
+  {"<p class='err'>パスワードが違います</p>" if error else ""}
+  <form method="POST">
+    <input type="password" name="password" placeholder="パスワード" autofocus>
+    <button type="submit">ログイン</button>
+  </form>
+</div></body></html>"""
+
+@app.route("/gallery/logout")
+def gallery_logout():
+    session.pop("gallery_auth", None)
+    return redirect("/gallery/login")
+
+@app.route("/gallery/image/<file_id>")
+def gallery_image(file_id):
+    if not session.get("gallery_auth"):
+        abort(403)
+    try:
+        data, mimetype = gallery.get_image_bytes(file_id)
+    except Exception:
+        abort(404)
+    return Response(data, mimetype=mimetype, headers={"Cache-Control": "private, max-age=3600"})
+
 
 BUKEN_SYSTEM_PROMPT = """あなたはKAGIYA建築設計事務所の物件管理AIアシスタントです。
 代表の渡辺さんとの会話をサポートします。
