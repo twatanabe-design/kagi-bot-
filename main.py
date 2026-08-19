@@ -289,6 +289,7 @@ def gallery_login():
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KAGIYA 施工事例ギャラリー - ログイン</title>
 <style>
+  * {{ box-sizing: border-box; }}
   body {{ font-family: -apple-system, sans-serif; background: #f0f2f5;
          display: flex; justify-content: center; align-items: center; height: 100dvh; }}
   .box {{ background: #fff; padding: 40px; border-radius: 12px;
