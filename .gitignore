@@ -1,2 +1,6 @@
 .env
 venv/
+credentials/
+*.json
+!package.json
+!requirements.json
