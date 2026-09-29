@@ -32,7 +32,7 @@ CSV_URL = os.environ.get(
     "JdNvv4kXBebqCpRTE58XPYsVWix4KV2CyP89tsgoGeGLL"
     "/pub?gid=348234433&single=true&output=csv"
 )
-MODEL = "claude-sonnet-4-5"
+MODEL = "claude-sonnet-4-6"
 CHECKLIST_COLS = [
     "案内図", "公図", "確定式地図", "インフラ計画", "レベル", "道路情報",
     "物件概要", "施主情報", "地盤調査データ", "構造図", "申請予定", "CADデータ",
