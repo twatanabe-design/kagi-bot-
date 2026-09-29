@@ -128,7 +128,7 @@ def handle_memo_command(memo_text: str) -> str:
 def classify_message(user_message, reply_text):
     try:
         result = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             max_tokens=50,
             messages=[{
                 "role": "user",
@@ -626,7 +626,7 @@ def buken_ask(question: str, sender: str = "たかまさ") -> str:
 
     try:
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5-5",
             max_tokens=1024,
             system=BUKEN_SYSTEM_PROMPT + "\n\n" + sheet_context,
             messages=claude_messages,
@@ -762,7 +762,7 @@ def handle_message(event):
         conversation_histories[user_id] = conversation_histories[user_id][-20:]
 
     response = anthropic_client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5-5",
         max_tokens=1000,
         system=SYSTEM_PROMPT,
         messages=conversation_histories[user_id]
